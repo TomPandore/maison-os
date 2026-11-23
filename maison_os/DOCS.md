@@ -39,7 +39,7 @@ ampoules ne sont ni réappairées, ni dérangées. Lecture seule par défaut
 
 ## Installer sur le Pi (module Home Assistant)
 
-1. Ajouter ce dépôt dans **Paramètres → Modules → Boutique → ⋮ → Dépôts**
+1. Ajouter `https://github.com/TomPandore/maison-os` dans **Paramètres → Modules → Boutique → ⋮ → Dépôts**
    (ou copier le dossier `maison_os/` dans `/addons` du Pi).
 2. Installer **Maison OS**, puis dans **Configuration** : choisir le `pin` (6 chiffres ou
    plus), la liste des `protected_rooms`, et éventuellement `quiet_start` / `quiet_end`.
