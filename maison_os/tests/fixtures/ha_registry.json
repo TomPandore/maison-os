@@ -1,0 +1,33 @@
+{
+  "_source": "Registres HA au format de config/area_registry/list et config/device_registry/list (HA 2026.11), noms et identifiants fictifs, structure de la maison",
+  "areas": [
+    {"area_id": "bureau", "name": "Bureau"},
+    {"area_id": "salle_a_manger", "name": "Salle à manger"},
+    {"area_id": "chambre_enfant", "name": "Chambre enfant"},
+    {"area_id": "salon", "name": "Salon"}
+  ],
+  "devices": [
+    {"id": "ha-dev-1", "area_id": "bureau", "name": "LED P45 E14 470LM MYKO RGBW", "name_by_user": "Lampe de bureau",
+     "manufacturer": "Kingfisher", "model": "LED P45 E14 470LM MYKO RGBW", "serial_number": "SERIAL-FICTIF-01",
+     "identifiers": [["matter", "deviceid_112210F47DE98115-0000000000000001-MatterNodeDevice"], ["matter", "serial_SERIAL-FICTIF-01"]],
+     "disabled_by": null, "entry_type": null},
+    {"id": "ha-dev-2", "area_id": "bureau", "name": "Lampe Plafond", "name_by_user": null,
+     "manufacturer": "Kingfisher", "model": "LED G95 E27 1521LM MYKO RGBW", "serial_number": "SERIAL-FICTIF-02",
+     "identifiers": [["matter", "serial_SERIAL-FICTIF-02"]],
+     "disabled_by": null, "entry_type": null},
+    {"id": "ha-dev-3", "area_id": "salle_a_manger", "name": "LED G95 E27 1521LM MYKO RGBW", "name_by_user": "Plafond",
+     "manufacturer": "Kingfisher", "model": "LED G95 E27 1521LM MYKO RGBW", "serial_number": "SERIAL-FICTIF-03",
+     "identifiers": [["matter", "deviceid_112210F47DE98115-0000000000000003-MatterNodeDevice"]],
+     "disabled_by": null, "entry_type": null},
+    {"id": "ha-dev-4", "area_id": "chambre_enfant", "name": "Veilleuse fusée", "name_by_user": null,
+     "manufacturer": "Espressif", "model": "esp32-c3", "serial_number": null,
+     "identifiers": [["esphome", "veilleuse-fictive"]], "disabled_by": null, "entry_type": null},
+    {"id": "ha-dev-5", "area_id": null, "name": "Téléphone", "name_by_user": null,
+     "manufacturer": "Xiaomi", "model": "fictif", "serial_number": null,
+     "identifiers": [["mobile_app", "telephone-fictif"]], "disabled_by": null, "entry_type": null},
+    {"id": "ha-dev-6", "area_id": null, "name": "Sun", "name_by_user": null,
+     "identifiers": [["sun", "fictif"]], "disabled_by": null, "entry_type": "service"},
+    {"id": "ha-dev-7", "area_id": "salon", "name": "Ancienne ampoule", "name_by_user": null,
+     "identifiers": [["matter", "serial_SERIAL-FICTIF-01"]], "disabled_by": "user", "entry_type": null}
+  ]
+}

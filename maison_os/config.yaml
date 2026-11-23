@@ -1,0 +1,34 @@
+name: Maison OS
+version: "0.2.0"
+slug: maison_os
+description: La maison pilotable par Claude (MCP), branchée sur le Matter Server — sans remplacer vos appareils.
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+ports:
+  8790/tcp: 8790
+ports_description:
+  8790/tcp: API, MCP et page d'état de Maison OS
+options:
+  pin: ""
+  matter_url: ws://core-matter-server:5580/ws
+  matter_read_only: true
+  protected_rooms:
+    - Chambre
+  allowed_hosts:
+    - homeassistant.local
+    - homeassistant
+schema:
+  pin: password
+  matter_url: str
+  matter_read_only: bool
+  protected_rooms:
+    - str
+  allowed_hosts:
+    - str
+  quiet_start: match(^\d{2}:\d{2}$)?
+  quiet_end: match(^\d{2}:\d{2}$)?
