@@ -21,6 +21,7 @@ from .core.guard import GuardPolicy
 from .core.hub import Hub
 from .core.scenes import load_scenes
 from .drivers.matter import MatterDriver
+from .drivers.tuya import TuyaDriver
 from .integrations.homeassistant import DEFAULT_URL as DEFAULT_HA_URL
 
 log = logging.getLogger("maison")
@@ -37,6 +38,10 @@ def build_hub(cfg: Config) -> Hub:
             read_only=bool(m.get("read_only", True)),
             transition_s=float(m.get("transition_s", 0.5)),
         ))
+    t = drivers.get("tuya") or {}
+    keys = cfg.data_dir / str(t.get("keys_file", "tuya.json"))
+    if t.get("enabled", keys.exists()):  # actif dès qu'il y a des clés locales
+        hub.add_driver(TuyaDriver(keys, read_only=bool(t.get("read_only", True)), poll_s=float(t.get("poll_s", 5))))
     return hub
 
 
