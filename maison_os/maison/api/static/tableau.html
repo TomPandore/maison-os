@@ -84,6 +84,14 @@
   .dev .n { font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dev .s { font-size: .82rem; color: var(--muted); }
   .empty { color: var(--muted); text-align: center; padding: 30px 10px; }
+  .rh { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 10px; }
+  .alloff { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 99px; font-size: .78rem; font-weight: 600;
+    color: var(--muted); transition: opacity .2s, background .15s; }
+  .alloff svg { width: 15px; height: 15px; }
+  .room h3 { min-width: 0; }
+  .alloff:not(:disabled):hover { background: var(--track); }
+  .alloff:active { transform: scale(.96); }
+  .alloff:disabled { opacity: .35; }
   .scenes { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px 16px 10px; }
   .scenes button { padding: 7px 14px; border-radius: 99px; font-size: .85rem; font-weight: 600; background: var(--track); }
   .scenes button:active { transform: scale(.96); }
@@ -226,6 +234,7 @@ const locked = (d) => !!S.me.person && S.me.deny_rooms.includes((d.room || "").t
 const unpaired = () => S.me.require_pairing && !S.me.person;
 const mayCommand = (d) => !unpaired() && !locked(d);
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const POWER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8M6.4 6.6a8 8 0 1 0 11.2 0"/></svg>';
 const BULB = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
 const PRESETS = [
   { name: "Blanc chaud", ct: 2700 }, { name: "Blanc neutre", ct: 4000 }, { name: "Blanc froid", ct: 6500 },
@@ -417,18 +426,28 @@ function renderRooms() {
   const roomLocked = (room) => unpaired() || (!!S.me.person && S.me.deny_rooms.includes((room || "").trim().toLowerCase()));
   const chips = (room) => { const sc = S.scenes.filter((x) => (x.room || "") === room); return sc.length ? `<div class="scenes">${
     sc.map((x) => `<button data-scene="${esc(x.id)}" ${roomLocked(room) ? "disabled" : ""}>${esc(x.name)}</button>`).join("")}</div>` : ""; };
-  $("rooms").innerHTML = rooms.map((room) => `<div class="room"><h3>${esc(room || "Sans pièce")}</h3>${chips(room)}${
+  const off = (room) => room ? `<button class="alloff" data-alloff="${esc(room)}" aria-label="Tout éteindre : ${esc(room)}">${POWER}<span>Tout éteindre</span></button>` : "";
+  $("rooms").innerHTML = rooms.map((room) => `<div class="room" data-room="${esc(room)}"><div class="rh"><h3>${esc(room || "Sans pièce")}</h3>${off(room)}</div>${chips(room)}${
     lights.filter((d) => (d.room || "") === room).sort((a, b) => a.name.localeCompare(b.name, "fr")).map((d) =>
       `<div class="dev" data-dev="${esc(d.id)}"><button class="ico" data-open="${esc(d.id)}" aria-label="Régler ${esc(d.name)}">${BULB}</button>
         <button class="txt" data-open="${esc(d.id)}"><div class="n">${esc(d.name)}</div><div class="s"></div></button>
         <button class="switch" role="switch" data-toggle="${esc(d.id)}" aria-label="${esc(d.name)}"></button></div>`).join("")}</div>`).join("");
   lights.forEach((d) => paintRow(d));
 }
+function paintOff() {
+  const lockedRoom = (room) => unpaired() || (!!S.me.person && S.me.deny_rooms.includes(room.trim().toLowerCase()));
+  document.querySelectorAll("[data-alloff]").forEach((b) => {
+    const room = b.dataset.alloff;
+    const anyOn = [...S.devices.values()].some((d) => isLight(d) && (d.room || "") === room && isOn(d));
+    b.disabled = !anyOn || lockedRoom(room) || b.classList.contains("busy");
+  });
+}
 function paintRow(d) {
   const row = document.querySelector(`.dev[data-dev="${CSS.escape(d.id)}"]`); if (!row) return;
   const on = isOn(d), lk = locked(d); row.classList.toggle("on", on && !lk); row.classList.toggle("locked", lk); row.style.setProperty("--c", css(lampRgb(d)));
   row.querySelector(".s").textContent = lk ? `Réservé · ${stateText(d).toLowerCase()}` : stateText(d);
   const sw = row.querySelector(".switch"); sw.setAttribute("aria-checked", String(on)); sw.disabled = !d.online || !can(d, "on") || !mayCommand(d);
+  paintOff();
 }
 function renderSheet() {
   const d = S.sel && S.devices.get(S.sel); if (!d) return;
@@ -543,6 +562,8 @@ slider($("temp"), "color_temp", (x) => { const d = S.devices.get(S.sel), [lo, hi
 
 /* ---------- gestes ---------- */
 document.addEventListener("click", (e) => {
+  const ao = e.target.closest("[data-alloff]");
+  if (ao) { allOff(ao.dataset.alloff, ao); return; }
   const sc = e.target.closest("[data-scene]");
   if (sc) { runScene(sc.dataset.scene, sc); return; }
   const t = e.target.closest("[data-floor],[data-toggle],[data-open],.spot,[data-preset],#sToggle");
@@ -566,6 +587,14 @@ $("pinForm").addEventListener("submit", async (e) => {
 });
 addEventListener("resize", () => { if (S.layout) { placeStage(); const li = S.sel && S.layout.lights.find((x) => x.device === S.sel && x.floor === S.floor); zoomTo(li || null); } });
 setInterval(() => { const n = isNight(); if (n !== S.night) { S.night = n; renderStage(); } }, 60000);
+
+async function allOff(room, btn) {
+  btn.classList.add("busy"); btn.disabled = true;
+  const r = await api("/api/pieces/eteindre", { method: "POST", headers: auth({ "content-type": "application/json" }), body: JSON.stringify({ room }) });
+  btn.classList.remove("busy"); paintOff();
+  if (r.ok) toast(r.data.held && r.data.held.length ? `${room} : en attente de validation` : `${room} : tout est éteint`);
+  else toast((r.data && (r.data.message || r.data.error)) || "Refusé");
+}
 
 async function runScene(id, btn) {
   btn.disabled = true;

@@ -53,6 +53,21 @@ def load_scenes(raw: Any) -> dict[str, Scene]:
     return out
 
 
+def room_off(hub: Hub, room: str) -> Scene | None:
+    """« Tout éteindre » : une ambiance faite à la volée, qui éteint ce qui est allumé dans la pièce."""
+    want = room.strip().lower()
+    if not want:
+        return None
+    devs = [d for d in hub.devices.values()
+            if (d.effective_room or "").strip().lower() == want and not d.hidden
+            and "on" in d.points and d.points["on"].spec.access.writable]
+    if not devs:
+        return None
+    name = devs[0].effective_room or room
+    return Scene("tout-eteindre", f"Tout éteindre · {name}"[:40], name,
+                 [{"device": d.id, "on": False} for d in devs if d.points["on"].value is not False])
+
+
 async def run_scene(hub: Hub, scene: Scene, *, origin: Origin, actor: str) -> dict[str, Any]:
     done, skipped, held, errors = [], [], [], []
     for a in scene.actions:

@@ -13,7 +13,7 @@ from mcp.server.mcpserver import MCPServer
 
 from ..core.hub import CommandError, Hub
 from ..core.model import Origin
-from ..core.scenes import run_scene
+from ..core.scenes import room_off, run_scene
 
 INSTRUCTIONS = """Tu pilotes la maison de la famille par ces outils.
 - Commence par `house_overview` pour voir les pièces, les appareils et leur état.
@@ -73,6 +73,14 @@ def build_mcp(hub: Hub, house_name: str) -> MCPServer:
         sc = hub.scenes.get(scene_id)
         if sc is None:
             return {"error": "ambiance inconnue", "scenes": list(hub.scenes)}
+        return await run_scene(hub, sc, origin=Origin.MCP, actor="claude")
+
+    @server.tool()
+    async def turn_off_room(room: str) -> dict[str, Any]:
+        """Éteint tout ce qui est allumé dans une pièce (ex. « Bureau »). Passe par la garde."""
+        sc = room_off(hub, room)
+        if sc is None:
+            return {"error": "pièce inconnue ou sans lumière"}
         return await run_scene(hub, sc, origin=Origin.MCP, actor="claude")
 
     @server.tool()
