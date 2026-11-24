@@ -30,7 +30,7 @@ from ..integrations import homeassistant as ha
 from .people import People
 
 MAX_BODY = 256 * 1024
-PING_S = 15  # silence max du flux avant un « ping » (visible par l'appli : elle se reconnecte sans)
+PING_S = 4  # silence max du flux avant un « ping » (visible par l'appli : elle se reconnecte sans)
 
 
 class HostGuard:

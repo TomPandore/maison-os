@@ -762,7 +762,7 @@ if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.reg
   if (devs.ok) for (const d of devs.data) S.devices.set(d.id, d);
   renderAll();
   /* Flux en direct. Un téléphone en veille (ou Tailscale) coupe la connexion sans prévenir :
-     au retour dans l'appli, ou après 40 s sans nouvelles, on se reconnecte et on recharge tout. */
+     au retour dans l'appli, ou après 10 s sans nouvelles, on se reconnecte et on recharge tout. */
   let es = null, lastMsg = Date.now(), lostT = 0, hiddenAt = 0;
   function connect() {
     if (es) es.close();
@@ -781,10 +781,10 @@ if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.reg
     es.onopen = () => { clearTimeout(lostT); renderHeader(); };
   }
   connect();
-  setInterval(() => { if (!document.hidden && Date.now() - lastMsg > 40000) connect(); }, 5000);
+  setInterval(() => { if (!document.hidden && Date.now() - lastMsg > 10000) connect(); }, 1000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) { hiddenAt = Date.now(); return; }
-    if (Date.now() - hiddenAt > 2000 || Date.now() - lastMsg > 20000) { connect(); loadMe().then(renderAll); }
+    if (Date.now() - hiddenAt > 2000 || Date.now() - lastMsg > 6000) { connect(); loadMe().then(renderAll); }
   });
   addEventListener("pageshow", (e) => { if (e.persisted) connect(); });
   addEventListener("online", connect);
