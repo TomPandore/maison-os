@@ -1,4 +1,4 @@
-"""`python -m maison [serve|set-pin|check] [--data DIR]`"""
+"""`python -m maison [serve|set-pin|check|telephones|retirer ID] [--data DIR]`"""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ from .config import Config, PinGuard
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="maison")
-    ap.add_argument("command", nargs="?", default="serve", choices=["serve", "set-pin", "check"])
+    ap.add_argument("command", nargs="?", default="serve", choices=["serve", "set-pin", "check", "telephones", "retirer"])
+    ap.add_argument("ident", nargs="?", help="pour « retirer » : l'identifiant du téléphone")
     ap.add_argument("--data", type=Path, default=None, help="dossier des données (défaut : ./data, ou /data en module HA)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
@@ -28,6 +29,19 @@ def main(argv: list[str] | None = None) -> int:
             print(e, file=sys.stderr)
             return 1
         print("Code enregistré (haché).")
+        return 0
+
+    if args.command in ("telephones", "retirer"):
+        from .api.people import People
+        people = People(cfg.data_dir, cfg.raw.get("people"))
+        if args.command == "retirer":
+            if not args.ident or not people.revoke(args.ident):
+                print("téléphone introuvable", file=sys.stderr)
+                return 1
+            print(f"Téléphone {args.ident} retiré : sa clé ne marche plus.")
+            return 0
+        for ph in people.phones():
+            print(f"{ph['id']}  {ph['person']:<12} {ph['label']}")
         return 0
 
     if args.command == "check":

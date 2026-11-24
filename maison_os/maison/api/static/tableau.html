@@ -7,6 +7,11 @@
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="{{house}}">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icone-192.png">
+<link rel="apple-touch-icon" href="/icone-192.png">
 <title>{{house}}</title>
 <style>
   :root {
@@ -79,6 +84,22 @@
   .dev .n { font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dev .s { font-size: .82rem; color: var(--muted); }
   .empty { color: var(--muted); text-align: center; padding: 30px 10px; }
+  .dev.locked .ico { background: var(--track); box-shadow: none; }
+  .dev.locked .n::after { content: " 🔒"; font-size: .8em; }
+  .spot.locked i { background: rgba(255,255,255,.6) !important; box-shadow: 0 0 0 2px rgba(0,0,0,.25) !important; }
+  .pairbar { margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .88rem; color: var(--muted); }
+  .pairbar[hidden] { display: none; }
+  .pairbar button, .dlg .go { padding: 8px 14px; border-radius: 12px; background: #0a84ff; color: #fff; font-weight: 600; }
+  .note { margin-top: 14px; font-size: .88rem; color: var(--muted); }
+  .dlg { border: 0; border-radius: 24px; padding: 22px; width: min(92vw, 380px); background: var(--bg1); color: var(--text);
+    box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  .dlg::backdrop { background: rgba(0,0,0,.35); backdrop-filter: blur(4px); }
+  .dlg h2 { font-size: 1.25rem; letter-spacing: -0.015em; }
+  .dlg p { color: var(--muted); font-size: .88rem; margin-top: 4px; }
+  .dlg label { display: block; font-size: .72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 6px; }
+  .dlg select, .dlg input { width: 100%; font: inherit; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg2); color: var(--text); }
+  .dlg .row2 { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .dlg .no { padding: 8px 14px; border-radius: 12px; color: var(--muted); font-weight: 600; }
 
   .switch { width: 51px; height: 31px; flex: none; border-radius: 99px; background: var(--track); position: relative; transition: background-color .25s; }
   .switch::after { content: ""; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
@@ -149,7 +170,8 @@
 <main>
   <header class="top">
     <div><h1>{{house}}</h1>
-    <p class="sub" id="sub" aria-live="polite">Connexion…</p></div>
+    <p class="sub" id="sub" aria-live="polite">Connexion…</p>
+    <div class="pairbar" id="pairbar" hidden><span>Ce téléphone peut regarder, pas commander.</span><button id="pairOpen">Associer ce téléphone</button></div></div>
     <div class="seg" id="floors" role="tablist" aria-label="Étages" hidden></div>
   </header>
   <section class="wrap" id="wrap" aria-label="La maison vue de haut" hidden>
@@ -171,17 +193,34 @@
       <div class="temp" id="temp" role="slider" tabindex="0" aria-labelledby="lTemp"><em id="tempKnob"></em></div></div>
     <div class="swatches" id="swatches" role="group" aria-label="Couleurs"></div>
   </div>
+  <p class="note" id="sNote" hidden></p>
   <div class="hold" id="hold" hidden>
     <p id="holdMsg"></p>
     <form id="pinForm"><input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Code de la maison" aria-label="Code de la maison"><button>Valider</button></form>
   </div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog class="dlg" id="pairDlg" aria-labelledby="pairTitle">
+  <form id="pairForm" method="dialog">
+    <h2 id="pairTitle">Associer ce téléphone</h2>
+    <p>Une seule fois par téléphone. Il faut le code de la maison.</p>
+    <label for="pairWho">À qui est ce téléphone ?</label><select id="pairWho"></select>
+    <label for="pairLabel">Nom du téléphone</label><input id="pairLabel" maxlength="60" placeholder="Téléphone">
+    <label for="pairPin">Code de la maison</label><input id="pairPin" type="password" inputmode="numeric" autocomplete="off">
+    <div class="row2"><button type="button" class="no" id="pairCancel">Annuler</button><button class="go">Associer</button></div>
+  </form>
+</dialog>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
-const S = { devices: new Map(), layout: null, floor: null, sel: null, night: false, zoom: 1, drag: null, hold: null };
+const S = { devices: new Map(), layout: null, floor: null, sel: null, night: false, zoom: 1, drag: null, hold: null,
+  me: { person: null, deny_rooms: [], require_pairing: false, profiles: [] } };
+let KEY = null; try { KEY = localStorage.getItem("maison-cle"); } catch (e) {}
+const auth = (h = {}) => (KEY ? { ...h, "x-maison-cle": KEY } : h);
+const locked = (d) => !!S.me.person && S.me.deny_rooms.includes((d.room || "").trim().toLowerCase());
+const unpaired = () => S.me.require_pairing && !S.me.person;
+const mayCommand = (d) => !unpaired() && !locked(d);
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const BULB = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
 const PRESETS = [
@@ -268,7 +307,8 @@ async function send(id, key, value) {
   if (key === "color" && d.points.color_mode) d.points.color_mode.value = "hs";
   if (key !== "on" && d.points.on) d.points.on.value = true;
   renderDevice(id);
-  const r = await api("/api/command", { method: "POST", headers: { "content-type": "application/json", "x-maison-origin": "ui" },
+  if (!mayCommand(d)) { toast(locked(d) ? `${d.room} : réservé` : "Associe d'abord ce téléphone"); return; }
+  const r = await api("/api/command", { method: "POST", headers: auth({ "content-type": "application/json", "x-maison-origin": "ui" }),
     body: JSON.stringify({ device_id: id, key, value, actor: "tableau" }) });
   if (r.status === 202 && r.data && r.data.approval_id) {
     d.points = JSON.parse(before); renderDevice(id);
@@ -277,6 +317,7 @@ async function send(id, key, value) {
     $("hold").hidden = false; $("pin").focus();
   } else if (!r.ok) {
     d.points = JSON.parse(before); renderDevice(id);
+    if (r.status === 401) { KEY = null; await loadMe(); renderAll(); }
     toast((r.data && (r.data.message || r.data.error)) || "Commande refusée");
   }
 }
@@ -285,7 +326,8 @@ async function send(id, key, value) {
 function plural(n) { return n === 0 ? "Tout est éteint" : n === 1 ? "1 lumière allumée" : `${n} lumières allumées`; }
 function renderHeader() {
   const lights = [...S.devices.values()].filter(isLight);
-  $("sub").textContent = lights.length ? plural(lights.filter(isOn).length) : "Aucune lumière trouvée";
+  $("sub").textContent = (lights.length ? plural(lights.filter(isOn).length) : "Aucune lumière trouvée") + (S.me.person ? ` · ${S.me.person}` : "");
+  $("pairbar").hidden = !unpaired();
 }
 function renderFloors() {
   const f = $("floors"), lay = S.layout;
@@ -349,7 +391,7 @@ function paintLight(d) {
   });
   const b = st.querySelector(`.spot[data-dev="${CSS.escape(d.id)}"]`);
   if (b) {
-    b.classList.toggle("on", on); b.classList.toggle("off-line", !d.online); b.classList.toggle("sel", S.sel === d.id);
+    b.classList.toggle("on", on); b.classList.toggle("off-line", !d.online); b.classList.toggle("sel", S.sel === d.id); b.classList.toggle("locked", locked(d));
     b.style.setProperty("--c", css(rgb)); b.style.setProperty("--inv", (1 / S.zoom).toFixed(3));
     b.setAttribute("aria-label", `${d.name}, ${stateText(d)}`);
   }
@@ -377,16 +419,18 @@ function renderRooms() {
 }
 function paintRow(d) {
   const row = document.querySelector(`.dev[data-dev="${CSS.escape(d.id)}"]`); if (!row) return;
-  const on = isOn(d); row.classList.toggle("on", on); row.style.setProperty("--c", css(lampRgb(d)));
-  row.querySelector(".s").textContent = stateText(d);
-  const sw = row.querySelector(".switch"); sw.setAttribute("aria-checked", String(on)); sw.disabled = !d.online || !can(d, "on");
+  const on = isOn(d), lk = locked(d); row.classList.toggle("on", on && !lk); row.classList.toggle("locked", lk); row.style.setProperty("--c", css(lampRgb(d)));
+  row.querySelector(".s").textContent = lk ? `Réservé · ${stateText(d).toLowerCase()}` : stateText(d);
+  const sw = row.querySelector(".switch"); sw.setAttribute("aria-checked", String(on)); sw.disabled = !d.online || !can(d, "on") || !mayCommand(d);
 }
 function renderSheet() {
   const d = S.sel && S.devices.get(S.sel); if (!d) return;
   $("sName").textContent = d.name; $("sRoom").textContent = `${d.room || "Sans pièce"} · ${stateText(d).toLowerCase()}`;
   const on = isOn(d), tg = $("sToggle");
-  tg.setAttribute("aria-checked", String(on)); tg.disabled = !d.online || !can(d, "on"); tg.setAttribute("aria-label", on ? "Éteindre" : "Allumer");
-  $("sBody").classList.toggle("dim", !d.online);
+  tg.setAttribute("aria-checked", String(on)); tg.disabled = !d.online || !can(d, "on") || !mayCommand(d); tg.setAttribute("aria-label", on ? "Éteindre" : "Allumer");
+  $("sBody").classList.toggle("dim", !d.online || !mayCommand(d));
+  const note = locked(d) ? `${d.room} : réservé, ce profil ne peut pas le commander.` : unpaired() ? "Associe ce téléphone pour pouvoir commander." : "";
+  $("sNote").textContent = note; $("sNote").hidden = !note;
   $("cBright").hidden = !can(d, "brightness");
   if (S.drag !== "brightness") paintBar(level(d), lampRgb(d));
   const ct = d.points.color_temp; $("cTemp").hidden = !can(d, "color_temp");
@@ -505,7 +549,7 @@ $("wrap").addEventListener("click", (e) => { if (S.sel && !e.target.closest(".sp
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 $("pinForm").addEventListener("submit", async (e) => {
   e.preventDefault(); if (!S.hold) return;
-  const r = await api(`/api/approvals/${encodeURIComponent(S.hold.id)}`, { method: "POST", headers: { "content-type": "application/json" },
+  const r = await api(`/api/approvals/${encodeURIComponent(S.hold.id)}`, { method: "POST", headers: auth({ "content-type": "application/json" }),
     body: JSON.stringify({ approve: true, pin: $("pin").value }) });
   $("pin").value = "";
   if (r.ok) { $("hold").hidden = true; S.hold = null; toast("Validé"); }
@@ -514,8 +558,31 @@ $("pinForm").addEventListener("submit", async (e) => {
 addEventListener("resize", () => { if (S.layout) { placeStage(); const li = S.sel && S.layout.lights.find((x) => x.device === S.sel && x.floor === S.floor); zoomTo(li || null); } });
 setInterval(() => { const n = isNight(); if (n !== S.night) { S.night = n; renderStage(); } }, 60000);
 
+/* ---------- association du téléphone ---------- */
+async function loadMe() {
+  const r = await api("/api/moi", { headers: auth() });
+  if (r.ok) S.me = r.data;
+  if (KEY && !S.me.person) { KEY = null; try { localStorage.removeItem("maison-cle"); } catch (e) {} }
+}
+$("pairOpen").addEventListener("click", () => {
+  $("pairWho").innerHTML = S.me.profiles.map((n) => `<option>${esc(n)}</option>`).join("");
+  $("pairLabel").value = /iPhone|Android/i.test(navigator.userAgent) ? "Téléphone" : "Ordinateur";
+  $("pairPin").value = ""; $("pairDlg").showModal();
+});
+$("pairCancel").addEventListener("click", () => $("pairDlg").close());
+$("pairForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await api("/api/associer", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ person: $("pairWho").value, label: $("pairLabel").value, pin: $("pairPin").value }) });
+  $("pairPin").value = "";
+  if (!r.ok) { toast(r.status === 403 ? "Code incorrect" : (r.data && r.data.error) || "Refusé"); return; }
+  KEY = r.data.key; try { localStorage.setItem("maison-cle", KEY); } catch (e) { toast("Ce navigateur ne garde pas la clé"); }
+  $("pairDlg").close(); await loadMe(); renderAll(); toast(`Associé à ${r.data.person}`);
+});
+
 /* ---------- démarrage ---------- */
 (async function start() {
+  await loadMe();
   const lay = await api("/api/tableau");
   if (lay.ok) { S.layout = lay.data; S.floor = lay.data.floors[0].id; S.night = isNight(); }
   const devs = await api("/api/devices");

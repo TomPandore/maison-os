@@ -14,6 +14,7 @@ from starlette.routing import Mount
 
 from .api.http import HostGuard, build_routes
 from .api.mcp_tools import build_mcp
+from .api.people import People
 from .api.tableau import build_tableau_routes
 from .config import Config, PinGuard
 from .core.guard import GuardPolicy
@@ -40,6 +41,7 @@ def build_hub(cfg: Config) -> Hub:
 def build_app(cfg: Config, hub: Hub | None = None) -> Starlette:
     hub = hub or build_hub(cfg)
     pins = PinGuard(cfg.data_dir, cfg.addon_pin)
+    people = People(cfg.data_dir, cfg.raw.get("people"))
     house = str(cfg.raw.get("house_name", "Maison"))
     mcp = build_mcp(hub, house)
     # Notre garde Host couvre toutes les routes ; celle du SDK MCP ferait doublon.
@@ -60,13 +62,15 @@ def build_app(cfg: Config, hub: Hub | None = None) -> Starlette:
 
     app = Starlette(
         routes=[*build_tableau_routes(cfg.data_dir, house),
-                *build_routes(hub, pins, house, ha_url=str((cfg.raw.get("homeassistant") or {}).get("url") or DEFAULT_HA_URL)),
+                *build_routes(hub, pins, house, ha_url=str((cfg.raw.get("homeassistant") or {}).get("url") or DEFAULT_HA_URL),
+                             people=people),
                 Mount("/", app=mcp_app)],
         middleware=[Middleware(HostGuard, allowed=list(cfg.raw.get("allowed_hosts", [])))],
         lifespan=lifespan,
     )
     app.state.hub = hub
     app.state.pins = pins
+    app.state.people = people
     if not pins.configured:
         log.warning("aucun code de la maison : `python -m maison set-pin` (ou l'option « pin » du module)")
     return app

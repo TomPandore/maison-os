@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import ipaddress
 import json
+from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
@@ -25,6 +26,7 @@ from ..config import PinGuard
 from ..core.hub import CommandError, Hub
 from ..core.model import Origin
 from ..integrations import homeassistant as ha
+from .people import People
 
 MAX_BODY = 256 * 1024
 PING_S = 25  # silence max du flux d'événements avant un « ping »
@@ -80,7 +82,10 @@ async def _json(request: Request) -> dict[str, Any]:
 MAX_IMPORT_IDS = 200
 
 
-def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEFAULT_URL) -> list[Route]:
+def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEFAULT_URL,
+                 people: People | None = None) -> list[Route]:
+    people = people or People(hub.data_dir or Path("."), {})
+
     async def health(request: Request) -> Response:
         return JSONResponse({
             "house": house_name,
@@ -112,13 +117,22 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
             data = await _json(request)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=415 if "content-type" in str(e) else 400)
+        profile = people.who(request.headers.get("x-maison-cle"))
+        if people.require_pairing and profile is None:
+            return JSONResponse({"status": "error", "message": "Ce téléphone n'est pas associé à la maison"}, status_code=401)
+        dev = hub.devices.get(str(data.get("device_id", "")))
+        if profile and dev and not profile.may_use(dev.effective_room):
+            hub.journal.write("command", device=dev.id, key=str(data.get("key", ""))[:40], actor=f"{profile.name}@{_caller(request)}",
+                              origin="ui", result="refusé", reason=f"{dev.effective_room} fermé à ce profil")
+            return JSONResponse({"status": "error", "message": f"{dev.effective_room} : réservé, pas pour ce profil"}, status_code=403)
         if request.headers.get("x-maison-origin") == "ui":
             origin = Origin.UI if pins.check(data.get("pin"), _caller(request)) else Origin.HOUSEHOLD
         else:
             origin = Origin.API
+        actor = f"{profile.name}@{_caller(request)}" if profile else str(data.get("actor") or origin.value)
         result = await hub.command(
             str(data.get("device_id", "")), str(data.get("key", "")), data.get("value"),
-            origin=origin, actor=str(data.get("actor") or origin.value)[:64],
+            origin=origin, actor=actor[:64],
         )
         code = {"done": 200, "pending": 202}.get(result.status, 400)
         return JSONResponse(result.to_json(), status_code=code)
@@ -232,6 +246,30 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
         hub.journal.write("import_ha", actor=actor, applied=len(applied), skipped=len(skipped))
         return JSONResponse({"applied": applied, "skipped": skipped})
 
+    async def me(request: Request) -> Response:
+        profile = people.who(request.headers.get("x-maison-cle"))
+        return JSONResponse({"person": profile.name if profile else None,
+                             "deny_rooms": sorted(profile.deny_rooms) if profile else [],
+                             "require_pairing": people.require_pairing,
+                             "profiles": list(people.profiles)})
+
+    async def pair(request: Request) -> Response:
+        """Associe CE téléphone à un profil : une personne de la maison, avec le code."""
+        try:
+            data = await _json(request)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        if not pins.check(data.get("pin"), _caller(request)):
+            return JSONResponse({"error": "code de la maison requis"}, status_code=403)
+        person = data.get("person")
+        try:
+            key = people.pair(str(person or ""), str(data.get("label") or ""))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        hub.journal.write("telephone_associe", person=person, actor=f"personne@{_caller(request)}", origin="ui",
+                          label=str(data.get("label") or "")[:60])
+        return JSONResponse({"key": key, "person": person})
+
     async def index(request: Request) -> Response:
         return HTMLResponse(STATUS_PAGE.replace("{{house}}", house_name))
 
@@ -246,6 +284,8 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
         Route("/api/approvals/{approval_id}", resolve, methods=["POST"]),
         Route("/api/labels/{device_id:path}", label, methods=["PUT"]),
         Route("/api/journal", journal),
+        Route("/api/moi", me),
+        Route("/api/associer", pair, methods=["POST"]),
         Route("/api/import/homeassistant", ha_import_preview),
         Route("/api/import/homeassistant", ha_import_apply, methods=["POST"]),
         Route("/api/events", events),

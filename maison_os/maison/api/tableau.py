@@ -150,8 +150,27 @@ def build_tableau_routes(data_dir: Path, house_name: str) -> list[Route]:
             return JSONResponse({"error": "image absente"}, status_code=404)
         return FileResponse(path, headers={"cache-control": "max-age=3600"})
 
+    clean = house_name.replace("<", "").replace(">", "").replace("&", "")[:30]
+
+    async def manifest(request: Request) -> Response:
+        return JSONResponse({
+            "name": clean, "short_name": clean, "start_url": "/", "scope": "/", "display": "standalone",
+            "background_color": "#fbfaf7", "theme_color": "#fbfaf7", "lang": "fr",
+            "icons": [{"src": "/icone-192.png", "sizes": "192x192", "type": "image/png"},
+                      {"src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}],
+        }, media_type="application/manifest+json")
+
+    async def icon(request: Request) -> Response:
+        size = request.path_params["size"]
+        if size not in ("192", "512"):
+            return JSONResponse({"error": "absent"}, status_code=404)
+        data = resources.files("maison.api").joinpath(f"static/icone-{size}.png").read_bytes()
+        return Response(data, media_type="image/png", headers={"cache-control": "max-age=86400"})
+
     return [
         Route("/", page),
+        Route("/manifest.webmanifest", manifest),
+        Route("/icone-{size}.png", icon),
         Route("/api/tableau", layout),
         Route("/tableau/media/{name}", media),
     ]
