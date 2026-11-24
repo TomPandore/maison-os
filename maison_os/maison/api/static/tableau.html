@@ -272,6 +272,24 @@
 const $ = (id) => document.getElementById(id);
 const S = { devices: new Map(), layout: null, floor: null, sel: null, night: false, zoom: 1, drag: null, hold: null,
   me: { person: null, deny_rooms: [], require_pairing: false, profiles: [] }, scenes: [] };
+/* Valeur visée après un ordre : une lampe qui fond (transition) renvoie ses étapes intermédiaires ;
+   on garde la valeur demandée affichée jusqu'à ce que la lampe y soit (ou 3 s), sinon le curseur « remonte » et saute. */
+const AIM = new Map();  // "id|key" → { v, real, t }
+const AIM_MS = 2500;
+function aimed(id, key, v) {  // une valeur reçue pendant la fenêtre : on la garde de côté, on affiche la cible
+  const a = AIM.get(id + "|" + key); if (!a) return v;
+  a.real = v; return a.v;
+}
+function aim(id, key, v) {
+  const k = id + "|" + key, old = AIM.get(k); if (old) clearTimeout(old.t);
+  const a = { v, real: undefined, t: setTimeout(() => {  // fin de la fenêtre : la vérité de la lampe
+    AIM.delete(k); const d = S.devices.get(id);
+    if (d && d.points[key] && a.real !== undefined && S.drag !== key) { d.points[key].value = a.real; renderDevice(id); }
+  }, AIM_MS) };
+  AIM.set(k, a);
+}
+function dropAim(id, key) { const a = AIM.get(id + "|" + key); if (a) { clearTimeout(a.t); AIM.delete(id + "|" + key); } }
+function keepAims(d) { for (const k of Object.keys(d.points || {})) if (AIM.has(d.id + "|" + k)) d.points[k].value = aimed(d.id, k, d.points[k].value); return d; }
 let KEY = null; try { KEY = localStorage.getItem("maison-cle"); } catch (e) {}
 const auth = (h = {}) => (KEY ? { ...h, "x-maison-cle": KEY } : h);
 const locked = (d) => !!S.me.person && S.me.deny_rooms.includes((d.room || "").trim().toLowerCase());
@@ -361,14 +379,16 @@ async function send(id, key, value) {
   const d = S.devices.get(id); if (!d || !d.points[key]) return;
   const before = JSON.stringify(d.points);
   d.points[key].value = value;
+  if (typeof value === "number" || typeof value === "string") aim(id, key, value);
   if (key === "color_temp" && d.points.color_mode) d.points.color_mode.value = "ct";
   if (key === "color" && d.points.color_mode) d.points.color_mode.value = "hs";
   if (["brightness", "color", "color_temp", "effect"].includes(key) && d.points.on) d.points.on.value = true;
   if (d.points[key].access === "w") d.points[key].value = null;
   renderDevice(id);
-  if (!mayCommand(d)) { toast(locked(d) ? `${d.room} : réservé` : "Associe d'abord ce téléphone"); return; }
+  if (!mayCommand(d)) { dropAim(id, key); toast(locked(d) ? `${d.room} : réservé` : "Associe d'abord ce téléphone"); return; }
   const r = await api("/api/command", { method: "POST", headers: auth({ "content-type": "application/json", "x-maison-origin": "ui" }),
     body: JSON.stringify({ device_id: id, key, value, actor: "tableau" }) });
+  if (!r.ok || r.status === 202) dropAim(id, key);  // rien ne change : pas de cible à tenir
   if (r.status === 202 && r.data && r.data.approval_id) {
     d.points = JSON.parse(before); renderDevice(id);
     S.hold = { id: r.data.approval_id, device: id };
@@ -744,10 +764,11 @@ if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.reg
   const es = new EventSource("/api/events");
   es.onmessage = (e) => {
     const ev = JSON.parse(e.data);
-    if (ev.type === "snapshot") { S.devices = new Map(ev.devices.map((d) => [d.id, d])); renderAll(); }
-    else if (ev.type === "device") { S.devices.set(ev.device.id, ev.device); renderAll(); }
+    if (ev.type === "snapshot") { S.devices = new Map(ev.devices.map((d) => [d.id, keepAims(d)])); renderAll(); }
+    else if (ev.type === "device") { S.devices.set(ev.device.id, keepAims(ev.device)); renderAll(); }
     else if (ev.type === "removed") { S.devices.delete(ev.device_id); if (S.sel === ev.device_id) closeSheet(); renderAll(); }
-    else if (ev.type === "state") { const d = S.devices.get(ev.device_id); if (d && d.points[ev.key] && S.drag !== ev.key) { d.points[ev.key].value = ev.value; renderDevice(d.id); } }
+    else if (ev.type === "state") { const d = S.devices.get(ev.device_id); if (d && d.points[ev.key] && S.drag !== ev.key) {
+      const v = aimed(d.id, ev.key, ev.value); if (d.points[ev.key].value === v) return; d.points[ev.key].value = v; renderDevice(d.id); } }
     else if (ev.type === "online") { const d = S.devices.get(ev.device_id); if (d) { d.online = ev.online; renderDevice(d.id); } }
   };
   let lostT = 0;  // n'affiche la coupure que si elle dure

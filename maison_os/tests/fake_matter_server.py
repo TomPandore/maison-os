@@ -9,6 +9,7 @@ Lancement manuel (pour essayer Maison sans le Pi) :
 from __future__ import annotations
 
 import asyncio
+import os
 import copy
 import json
 import sys
@@ -25,6 +26,7 @@ class FakeMatterServer:
         data = json.loads(FIXTURE.read_text(encoding="utf-8"))
         self.info: dict[str, Any] = data["server_info"]
         self.nodes: dict[int, dict[str, Any]] = {n["node_id"]: copy.deepcopy(n) for n in data["nodes"]}
+        self.fade_s = 0.0  # > 0 : la luminosité fond par étapes, comme une vraie ampoule
         self.commands: list[dict[str, Any]] = []
         self.clients: set[web.WebSocketResponse] = set()
         self.runner: web.AppRunner | None = None
@@ -99,8 +101,11 @@ class FakeMatterServer:
         if cl == 6:
             await self.set_attr(n, f"{ep}/6/0", name == "On" if name in ("On", "Off") else not self.nodes[n]["attributes"][f"{ep}/6/0"])
         elif cl == 8 and name == "MoveToLevelWithOnOff":
-            await self.set_attr(n, f"{ep}/8/0", p["level"])
             await self.set_attr(n, f"{ep}/6/0", True)
+            if self.fade_s > 0:  # comme une vraie ampoule qui fond : elle renvoie ses étapes
+                asyncio.get_running_loop().create_task(self._fade(n, f"{ep}/8/0", p["level"]))
+            else:
+                await self.set_attr(n, f"{ep}/8/0", p["level"])
         elif cl == 768 and name == "MoveToColorTemperature":
             await self.set_attr(n, f"{ep}/768/7", p["colorTemperatureMireds"])
             await self.set_attr(n, f"{ep}/768/8", 2)
@@ -110,8 +115,17 @@ class FakeMatterServer:
             await self.set_attr(n, f"{ep}/768/8", 0)
 
 
+    async def _fade(self, n: int, path: str, target: int) -> None:
+        start = self.nodes[n]["attributes"].get(path) or 1
+        steps = 8
+        for i in range(1, steps + 1):
+            await asyncio.sleep(self.fade_s / steps)
+            await self.set_attr(n, path, round(start + (target - start) * i / steps))
+
+
 async def _main(port: int) -> None:
     srv = FakeMatterServer()
+    srv.fade_s = float(os.environ.get("FAUX_FONDU", "0"))
     await srv.start(port)
     print(f"Faux Matter Server sur {srv.url}")
     await asyncio.Event().wait()
