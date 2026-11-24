@@ -126,6 +126,15 @@
   .fx button:active { transform: scale(.96); }
   .fx button:disabled, .fx select:disabled { opacity: .4; }
   .fx .switch { flex: none; }
+  .fxdlg { border: 0; padding: 0; background: none; width: min(94vw, 400px); max-height: 92dvh; overflow: visible; margin: auto; }
+  .fxdlg::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(6px); }
+  .fxdlg[open] { animation: fxin .32s cubic-bezier(.2,.9,.3,1); }
+  @keyframes fxin { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+  .fxdlg .fx { margin: 0; max-height: 92dvh; overflow-y: auto; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+  .fx-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.12);
+    display: grid; place-items: center; font-size: 1.1rem; line-height: 1; z-index: 2; }
+  .dev .ico.rkt svg { width: 19px; height: 19px; }
+  @media (prefers-reduced-motion: reduce) { .fxdlg[open] { animation: none; } }
   .scenes { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px 16px 10px; }
   .scenes button { padding: 7px 14px; border-radius: 99px; font-size: .85rem; font-weight: 600; background: var(--track); }
   .scenes button:active { transform: scale(.96); }
@@ -194,7 +203,7 @@
       gap: 0 28px; max-width: 1500px; margin: 0 auto; padding: 0 28px 28px; min-height: 100dvh; }
     .top { grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 30px 4px 20px; }
     .top .seg { margin-top: 0; }
-    .rooms { grid-column: 1; grid-row: 2; min-width: 0; padding: 4px 6px 24px; align-content: start;
+    .rooms { grid-auto-rows: max-content; grid-column: 1; grid-row: 2; min-width: 0; padding: 4px 6px 24px; align-content: start;
       max-height: calc(100dvh - 150px); overflow-x: hidden; overflow-y: auto; }
     .wrap, .wrap.night { grid-column: 2; grid-row: 2; width: auto; margin: 0; height: calc(100dvh - 150px); min-height: 460px;
       border-radius: 30px; box-shadow: 0 12px 40px var(--shadow), inset 0 0 0 1px var(--card-line); }
@@ -246,6 +255,7 @@
   </div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog class="fxdlg" id="fxDlg" aria-label="Réglages"><div id="fxBody"></div></dialog>
 <dialog class="dlg" id="pairDlg" aria-labelledby="pairTitle">
   <form id="pairForm" method="dialog">
     <h2 id="pairTitle">Associer ce téléphone</h2>
@@ -269,6 +279,7 @@ const unpaired = () => S.me.require_pairing && !S.me.person;
 const mayCommand = (d) => !unpaired() && !locked(d);
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const POWER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8M6.4 6.6a8 8 0 1 0 11.2 0"/></svg>';
+const ROCKET = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5c2.6 2 4 5 4 8.5v5H8v-5c0-3.5 1.4-6.5 4-8.5z"/><circle cx="12" cy="9.5" r="1.6"/><path d="M8 13l-2.5 2.5V19L8 17.5M16 13l2.5 2.5V19L16 17.5M10.5 19.5L12 22l1.5-2.5"/></svg>';
 const BULB = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
 const PRESETS = [
   { name: "Blanc chaud", ct: 2700 }, { name: "Blanc neutre", ct: 4000 }, { name: "Blanc froid", ct: 6500 },
@@ -291,7 +302,7 @@ const isLight = (d) => d.kind === "light" || d.kind === "switch";
 const isOn = (d) => !!pv(d, "on") && d.online;
 function lampRgb(d) {
   const mode = pv(d, "color_mode"), c = hexRgb(pv(d, "color"));
-  if (c && mode && mode !== "ct") return c;
+  if (c && (mode ? mode !== "ct" : !pv(d, "color_temp"))) return c;
   const k = pv(d, "color_temp"); return k ? kelvinRgb(k) : [255, 200, 140];
 }
 function level(d) { const b = pv(d, "brightness"); return typeof b === "number" ? b : (isOn(d) ? 100 : 0); }
@@ -463,10 +474,9 @@ function renderRooms() {
     sc.map((x) => `<button data-scene="${esc(x.id)}" ${roomLocked(room) ? "disabled" : ""}>${esc(x.name)}</button>`).join("")}</div>` : ""; };
   const off = (room) => room ? `<button class="alloff" data-alloff="${esc(room)}" aria-label="Tout éteindre : ${esc(room)}">${POWER}<span>Tout éteindre</span></button>` : "";
   $("rooms").innerHTML = rooms.map((room) => `<div class="room" data-room="${esc(room)}"><div class="rh"><h3>${esc(room || "Sans pièce")}</h3>${off(room)}</div>${chips(room)}${
-    lights.filter((d) => (d.room || "") === room).sort((a, b) => a.name.localeCompare(b.name, "fr")).map((d) => cardOf(d) ? fxHtml(d, cardOf(d)) :
-      `<div class="dev" data-dev="${esc(d.id)}"><button class="ico" data-open="${esc(d.id)}" aria-label="Régler ${esc(d.name)}">${BULB}</button>
-        <button class="txt" data-open="${esc(d.id)}"><div class="n">${esc(d.name)}</div><div class="s"></div></button>
-        <button class="switch" role="switch" data-toggle="${esc(d.id)}" aria-label="${esc(d.name)}"></button></div>`).join("")}</div>`).join("");
+    lights.filter((d) => (d.room || "") === room).sort((a, b) => a.name.localeCompare(b.name, "fr")).map((d) => { const op = cardOf(d) ? "data-fxopen" : "data-open"; return `<div class="dev" data-dev="${esc(d.id)}"><button class="ico${cardOf(d) ? " rkt" : ""}" ${op}="${esc(d.id)}" aria-label="Régler ${esc(d.name)}">${cardOf(d) ? ROCKET : BULB}</button>
+        <button class="txt" ${op}="${esc(d.id)}"><div class="n">${esc(d.name)}</div><div class="s"></div></button>
+        <button class="switch" role="switch" data-toggle="${esc(d.id)}" aria-label="${esc(d.name)}"></button></div>`; }).join("")}</div>`).join("");
   lights.forEach((d) => { paintRow(d); paintFx(d); });
 }
 
@@ -487,7 +497,7 @@ function fxHtml(d, card) {
   const btn = (re, label, cls = "") => { const k = Object.keys(d.points).find((x) => re.test(x) && d.points[x].access === "w"); return k ? `<button class="${cls}" data-fxpress="${k}">${label}</button>` : ""; };
   const dots = sel ? d.points[sel].choices.map((n) => `<button class="fx-dot" data-fxsel="${esc(n)}" title="${esc(n)}" aria-label="${esc(n)}" style="--c:${FX_COLORS[n] || "#ccc"}"></button>`).join("") : "";
   const chips = eff ? eff.choices.filter((n) => !/collage/i.test(n)).map((n) => `<button class="fx-chip" data-fxeff="${esc(n)}">${esc(FX_EFFECT[n] || n)}</button>`).join("") : "";
-  return `<div class="fx" data-fx="${esc(d.id)}">
+  return `<div class="fx" data-fx="${esc(d.id)}"><button class="fx-close" data-fxclose aria-label="Fermer">✕</button>
     <div class="fx-top"><div class="rk" style="--m:url('/tableau/media/${esc(card.mask)}')"><div class="glow"></div><img src="/tableau/media/${esc(card.image)}" alt=""><div class="tint"></div><div class="lum"></div></div>
       <div><h4>${esc(d.name)}</h4><p class="st"></p><div class="row"><span>Allumée</span><button class="switch" role="switch" data-toggle="${esc(d.id)}" aria-label="${esc(d.name)}"></button></div></div></div>
     ${dots ? `<div><p class="lbl">Couleur</p><div class="fx-dots">${dots}</div></div>` : ""}
@@ -497,6 +507,10 @@ function fxHtml(d, card) {
       <div class="row"><span>🌿 Réveil vert</span>${fxTime(d, fxKey(d, /^reveil.*heure/), fxKey(d, /^reveil.*minute/))}</div></div>` : ""}
     <div class="fx-acts">${btn(/^mode_nuit/, "🌙 Mode nuit")}${btn(/^reveil_vert/, "🌿 Réveil vert")}${btn(/^decollage$/, "🚀 Décollage !", "go")}</div>
   </div>`;
+}
+function openFx(id) {
+  const d = S.devices.get(id), card = d && cardOf(d); if (!card) return;
+  $("fxBody").innerHTML = fxHtml(d, card); paintFx(d); $("fxDlg").showModal();
 }
 function paintFx(d) {
   const el = document.querySelector(`.fx[data-fx="${CSS.escape(d.id)}"]`); if (!el) return;
@@ -639,6 +653,9 @@ slider($("temp"), "color_temp", (x) => { const d = S.devices.get(S.sel), [lo, hi
 
 /* ---------- gestes ---------- */
 document.addEventListener("click", (e) => {
+  const fo = e.target.closest("[data-fxopen]");
+  if (fo) { openFx(fo.dataset.fxopen); return; }
+  if (e.target.closest("[data-fxclose]") || e.target === $("fxDlg")) { $("fxDlg").close(); return; }
   const fx = e.target.closest(".fx");
   if (fx) {
     const id = fx.dataset.fx, d = S.devices.get(id), b = e.target.closest("button");
