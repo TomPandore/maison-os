@@ -87,6 +87,7 @@ class Approval:
 class Hub:
     def __init__(self, data_dir: Path | None, guard: GuardPolicy, rooms: list[str] | None = None):
         self.data_dir = data_dir
+        self.scenes: dict = {}  # id → Scene (maison.core.scenes)
         self.guard = guard
         self.configured_rooms = list(rooms or [])
         self.devices: dict[str, Device] = {}

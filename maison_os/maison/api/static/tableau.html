@@ -84,6 +84,10 @@
   .dev .n { font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dev .s { font-size: .82rem; color: var(--muted); }
   .empty { color: var(--muted); text-align: center; padding: 30px 10px; }
+  .scenes { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px 16px 10px; }
+  .scenes button { padding: 7px 14px; border-radius: 99px; font-size: .85rem; font-weight: 600; background: var(--track); }
+  .scenes button:active { transform: scale(.96); }
+  .scenes button:disabled { opacity: .4; }
   .dev.locked .ico { background: var(--track); box-shadow: none; }
   .dev.locked .n::after { content: " 🔒"; font-size: .8em; }
   .spot.locked i { background: rgba(255,255,255,.6) !important; box-shadow: 0 0 0 2px rgba(0,0,0,.25) !important; }
@@ -215,7 +219,7 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 const S = { devices: new Map(), layout: null, floor: null, sel: null, night: false, zoom: 1, drag: null, hold: null,
-  me: { person: null, deny_rooms: [], require_pairing: false, profiles: [] } };
+  me: { person: null, deny_rooms: [], require_pairing: false, profiles: [] }, scenes: [] };
 let KEY = null; try { KEY = localStorage.getItem("maison-cle"); } catch (e) {}
 const auth = (h = {}) => (KEY ? { ...h, "x-maison-cle": KEY } : h);
 const locked = (d) => !!S.me.person && S.me.deny_rooms.includes((d.room || "").trim().toLowerCase());
@@ -410,7 +414,10 @@ function renderRooms() {
     const li = lay.lights.find((x) => ids.includes(x.device)); return li ? lay.floors.findIndex((f) => f.id === li.floor) : 99;
   };
   const rooms = [...new Set(lights.map((d) => d.room || ""))].sort((a, b) => order(a) - order(b) || (a || "~").localeCompare(b || "~", "fr"));
-  $("rooms").innerHTML = rooms.map((room) => `<div class="room"><h3>${esc(room || "Sans pièce")}</h3>${
+  const roomLocked = (room) => unpaired() || (!!S.me.person && S.me.deny_rooms.includes((room || "").trim().toLowerCase()));
+  const chips = (room) => { const sc = S.scenes.filter((x) => (x.room || "") === room); return sc.length ? `<div class="scenes">${
+    sc.map((x) => `<button data-scene="${esc(x.id)}" ${roomLocked(room) ? "disabled" : ""}>${esc(x.name)}</button>`).join("")}</div>` : ""; };
+  $("rooms").innerHTML = rooms.map((room) => `<div class="room"><h3>${esc(room || "Sans pièce")}</h3>${chips(room)}${
     lights.filter((d) => (d.room || "") === room).sort((a, b) => a.name.localeCompare(b.name, "fr")).map((d) =>
       `<div class="dev" data-dev="${esc(d.id)}"><button class="ico" data-open="${esc(d.id)}" aria-label="Régler ${esc(d.name)}">${BULB}</button>
         <button class="txt" data-open="${esc(d.id)}"><div class="n">${esc(d.name)}</div><div class="s"></div></button>
@@ -536,6 +543,8 @@ slider($("temp"), "color_temp", (x) => { const d = S.devices.get(S.sel), [lo, hi
 
 /* ---------- gestes ---------- */
 document.addEventListener("click", (e) => {
+  const sc = e.target.closest("[data-scene]");
+  if (sc) { runScene(sc.dataset.scene, sc); return; }
   const t = e.target.closest("[data-floor],[data-toggle],[data-open],.spot,[data-preset],#sToggle");
   if (!t) return;
   if (t.dataset.floor) { S.floor = t.dataset.floor; closeSheet(); renderFloors(); renderStage(); return; }
@@ -557,6 +566,15 @@ $("pinForm").addEventListener("submit", async (e) => {
 });
 addEventListener("resize", () => { if (S.layout) { placeStage(); const li = S.sel && S.layout.lights.find((x) => x.device === S.sel && x.floor === S.floor); zoomTo(li || null); } });
 setInterval(() => { const n = isNight(); if (n !== S.night) { S.night = n; renderStage(); } }, 60000);
+
+async function runScene(id, btn) {
+  btn.disabled = true;
+  const r = await api(`/api/scenes/${encodeURIComponent(id)}`, { method: "POST", headers: auth({ "content-type": "application/json" }), body: "{}" });
+  btn.disabled = false;
+  const name = (S.scenes.find((x) => x.id === id) || {}).name || "Ambiance";
+  if (r.ok) toast(r.data.held && r.data.held.length ? `${name} : en attente de validation` : `${name} ✓`);
+  else toast((r.data && (r.data.message || r.data.error)) || "Refusé");
+}
 
 /* ---------- association du téléphone ---------- */
 async function loadMe() {
@@ -584,6 +602,7 @@ $("pairForm").addEventListener("submit", async (e) => {
 if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
 (async function start() {
   await loadMe();
+  const scs = await api("/api/scenes"); if (scs.ok) S.scenes = scs.data;
   const lay = await api("/api/tableau");
   if (lay.ok) { S.layout = lay.data; S.floor = lay.data.floors[0].id; S.night = isNight(); }
   const devs = await api("/api/devices");

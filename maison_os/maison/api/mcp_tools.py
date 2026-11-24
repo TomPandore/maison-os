@@ -13,6 +13,7 @@ from mcp.server.mcpserver import MCPServer
 
 from ..core.hub import CommandError, Hub
 from ..core.model import Origin
+from ..core.scenes import run_scene
 
 INSTRUCTIONS = """Tu pilotes la maison de la famille par ces outils.
 - Commence par `house_overview` pour voir les pièces, les appareils et leur état.
@@ -49,6 +50,7 @@ def build_mcp(hub: Hub, house_name: str) -> MCPServer:
             "unassigned": unassigned,
             "protected_rooms": sorted(hub.guard.protected_rooms),
             "pending_approvals": len(hub.pending()),
+            "scenes": [s.to_json() for s in hub.scenes.values()],
         }
 
     @server.tool()
@@ -64,6 +66,14 @@ def build_mcp(hub: Hub, house_name: str) -> MCPServer:
         """Donne un ordre à un appareil (passe par la garde). Statuts : done, pending, error."""
         result = await hub.command(device_id, key, value, origin=Origin.MCP, actor="claude")
         return result.to_json()
+
+    @server.tool()
+    async def activate_scene(scene_id: str) -> dict[str, Any]:
+        """Lance une ambiance (scène) par son id (voir `scenes` dans house_overview). Passe par la garde."""
+        sc = hub.scenes.get(scene_id)
+        if sc is None:
+            return {"error": "ambiance inconnue", "scenes": list(hub.scenes)}
+        return await run_scene(hub, sc, origin=Origin.MCP, actor="claude")
 
     @server.tool()
     async def pending_approvals() -> list[dict[str, Any]]:

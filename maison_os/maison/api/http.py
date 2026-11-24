@@ -25,6 +25,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from ..config import PinGuard
 from ..core.hub import CommandError, Hub
 from ..core.model import Origin
+from ..core.scenes import run_scene
 from ..integrations import homeassistant as ha
 from .people import People
 
@@ -246,6 +247,23 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
         hub.journal.write("import_ha", actor=actor, applied=len(applied), skipped=len(skipped))
         return JSONResponse({"applied": applied, "skipped": skipped})
 
+    async def scenes(request: Request) -> Response:
+        return JSONResponse([s.to_json() for s in hub.scenes.values()])
+
+    async def scene_run(request: Request) -> Response:
+        sc = hub.scenes.get(request.path_params["scene_id"])
+        if sc is None:
+            return JSONResponse({"status": "error", "message": "ambiance inconnue"}, status_code=404)
+        profile = people.who(request.headers.get("x-maison-cle"))
+        if people.require_pairing and profile is None:
+            return JSONResponse({"status": "error", "message": "Ce téléphone n'est pas associé à la maison"}, status_code=401)
+        rooms = {sc.room} | {hub.devices[a["device"]].effective_room for a in sc.actions if a["device"] in hub.devices}
+        if profile and any(not profile.may_use(r) for r in rooms if r):
+            return JSONResponse({"status": "error", "message": f"{sc.name} : réservé, pas pour ce profil"}, status_code=403)
+        actor = f"{profile.name}@{_caller(request)}" if profile else f"personne@{_caller(request)}"
+        res = await run_scene(hub, sc, origin=Origin.HOUSEHOLD, actor=actor[:64])
+        return JSONResponse(res, status_code=200 if res["status"] == "done" else 400)
+
     async def me(request: Request) -> Response:
         profile = people.who(request.headers.get("x-maison-cle"))
         return JSONResponse({"person": profile.name if profile else None,
@@ -285,6 +303,8 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
         Route("/api/labels/{device_id:path}", label, methods=["PUT"]),
         Route("/api/journal", journal),
         Route("/api/moi", me),
+        Route("/api/scenes", scenes),
+        Route("/api/scenes/{scene_id}", scene_run, methods=["POST"]),
         Route("/api/associer", pair, methods=["POST"]),
         Route("/api/import/homeassistant", ha_import_preview),
         Route("/api/import/homeassistant", ha_import_apply, methods=["POST"]),

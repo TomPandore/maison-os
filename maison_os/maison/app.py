@@ -19,6 +19,7 @@ from .api.tableau import build_tableau_routes
 from .config import Config, PinGuard
 from .core.guard import GuardPolicy
 from .core.hub import Hub
+from .core.scenes import load_scenes
 from .drivers.matter import MatterDriver
 from .integrations.homeassistant import DEFAULT_URL as DEFAULT_HA_URL
 
@@ -27,6 +28,7 @@ log = logging.getLogger("maison")
 
 def build_hub(cfg: Config) -> Hub:
     hub = Hub(cfg.data_dir, GuardPolicy.from_config(cfg.raw.get("guard", {})), rooms=cfg.raw.get("rooms", []))
+    hub.scenes = load_scenes(cfg.raw.get("scenes"))
     drivers = cfg.raw.get("drivers", {})
     m = drivers.get("matter") or {}
     if m.get("enabled", True):
