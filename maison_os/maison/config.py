@@ -26,7 +26,7 @@ DEFAULTS: dict[str, Any] = {
     "rooms": [],
     "guard": {"protected_rooms": [], "quiet_hours": {}, "hold_unassigned": True},
     "homeassistant": {"url": "ws://supervisor/core/websocket"},
-    "drivers": {"matter": {"enabled": True, "url": "ws://core-matter-server:5580/ws", "read_only": True, "transition_s": 0.5}},
+    "drivers": {"matter": {"enabled": True, "url": "ws://core-matter-server:5580/ws", "read_only": True, "transition_s": 0}},
 }
 
 

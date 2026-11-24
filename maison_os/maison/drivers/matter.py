@@ -160,10 +160,11 @@ def hex_to_xy(color: str) -> tuple[int, int]:
 
 class MatterDriver(Driver):
     def __init__(self, id: str = "matter", url: str = "ws://core-matter-server:5580/ws",
-                 read_only: bool = True, transition_s: float = 0.5):
+                 read_only: bool = True, transition_s: float = 0):
         self.id = id
         self.url = url
         self.read_only = read_only
+        # 0 par défaut : des ampoules (MYKO) lisent mal une transition et fondent à ~10 pas/s (7 s pour 25 %).
         self.transition = max(0, min(600, round(transition_s * 10)))  # en dixièmes de seconde
         self.server_info: dict[str, Any] = {}
         self.nodes: dict[int, dict[str, Any]] = {}

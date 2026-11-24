@@ -37,7 +37,7 @@ def build_hub(cfg: Config) -> Hub:
         hub.add_driver(MatterDriver(
             url=m.get("url", "ws://core-matter-server:5580/ws"),
             read_only=bool(m.get("read_only", True)),
-            transition_s=float(m.get("transition_s", 0.5)),
+            transition_s=float(m.get("transition_s", 0)),
         ))
     t = drivers.get("tuya") or {}
     keys = cfg.data_dir / str(t.get("keys_file", "tuya.json"))

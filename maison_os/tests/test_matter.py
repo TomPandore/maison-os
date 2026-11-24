@@ -104,7 +104,7 @@ async def test_orders_go_through_and_come_back(tmp_path, server):
         r = await hub.command(UID1, "brightness", 40, origin=Origin.UI, actor="test")
         assert r.status == "done", r.message
         assert server.commands[-1]["command_name"] == "MoveToLevelWithOnOff"
-        assert server.commands[-1]["payload"] == {"level": 102, "transitionTime": 5, "optionsMask": 0, "optionsOverride": 0}
+        assert server.commands[-1]["payload"] == {"level": 102, "transitionTime": 0, "optionsMask": 0, "optionsOverride": 0}
         await wait_for(lambda: hub.devices[UID1].points["brightness"].value == 40)
 
         r = await hub.command(UID1, "color_temp", 2700, origin=Origin.UI, actor="test")
