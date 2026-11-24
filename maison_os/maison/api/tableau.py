@@ -167,8 +167,22 @@ def build_tableau_routes(data_dir: Path, house_name: str) -> list[Route]:
         data = resources.files("maison.api").joinpath(f"static/icone-{size}.png").read_bytes()
         return Response(data, media_type="image/png", headers={"cache-control": "max-age=86400"})
 
+    async def service_worker(request: Request) -> Response:
+        # Rien en cache sauf la page « hors ligne » : l'état de la maison vient toujours du Pi.
+        js = (
+            "const OFF='<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\">"
+            "<body style=\"font:17px system-ui;padding:40px 24px;color:#1d1d1f;background:#fbfaf7\">"
+            "<h1 style=\"font-size:28px\">Maison injoignable</h1><p>Vérifie le Wi-Fi ou Tailscale, puis réessaie.</p>';\n"
+            "self.addEventListener('install',e=>self.skipWaiting());\n"
+            "self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));\n"
+            "self.addEventListener('fetch',e=>{if(e.request.mode!=='navigate')return;"
+            "e.respondWith(fetch(e.request).catch(()=>new Response(OFF,{headers:{'content-type':'text/html; charset=utf-8'}})));});\n"
+        )
+        return Response(js, media_type="text/javascript", headers={"cache-control": "no-cache"})
+
     return [
         Route("/", page),
+        Route("/sw.js", service_worker),
         Route("/manifest.webmanifest", manifest),
         Route("/icone-{size}.png", icon),
         Route("/api/tableau", layout),

@@ -105,5 +105,7 @@ async def test_install_manifest(house):
     r = await http.get("/icone-192.png")
     assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
     assert (await http.get("/icone-13.png")).status_code == 404
+    sw = await http.get("/sw.js")
+    assert sw.status_code == 200 and "fetch" in sw.text
     page = (await http.get("/")).text
     assert 'rel="manifest"' in page and json  # la page déclare l'appli

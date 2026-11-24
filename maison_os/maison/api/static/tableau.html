@@ -581,6 +581,7 @@ $("pairForm").addEventListener("submit", async (e) => {
 });
 
 /* ---------- démarrage ---------- */
+if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
 (async function start() {
   await loadMe();
   const lay = await api("/api/tableau");
