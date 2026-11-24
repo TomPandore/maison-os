@@ -761,19 +761,33 @@ if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.reg
   const devs = await api("/api/devices");
   if (devs.ok) for (const d of devs.data) S.devices.set(d.id, d);
   renderAll();
-  const es = new EventSource("/api/events");
-  es.onmessage = (e) => {
-    const ev = JSON.parse(e.data);
-    if (ev.type === "snapshot") { S.devices = new Map(ev.devices.map((d) => [d.id, keepAims(d)])); renderAll(); }
-    else if (ev.type === "device") { S.devices.set(ev.device.id, keepAims(ev.device)); renderAll(); }
-    else if (ev.type === "removed") { S.devices.delete(ev.device_id); if (S.sel === ev.device_id) closeSheet(); renderAll(); }
-    else if (ev.type === "state") { const d = S.devices.get(ev.device_id); if (d && d.points[ev.key] && S.drag !== ev.key) {
-      const v = aimed(d.id, ev.key, ev.value); if (d.points[ev.key].value === v) return; d.points[ev.key].value = v; renderDevice(d.id); } }
-    else if (ev.type === "online") { const d = S.devices.get(ev.device_id); if (d) { d.online = ev.online; renderDevice(d.id); } }
-  };
-  let lostT = 0;  // n'affiche la coupure que si elle dure
-  es.onerror = () => { clearTimeout(lostT); lostT = setTimeout(() => { $("sub").textContent = "Reconnexion…"; }, 4000); };
-  es.onopen = () => { clearTimeout(lostT); renderHeader(); };
+  /* Flux en direct. Un téléphone en veille (ou Tailscale) coupe la connexion sans prévenir :
+     au retour dans l'appli, ou après 40 s sans nouvelles, on se reconnecte et on recharge tout. */
+  let es = null, lastMsg = Date.now(), lostT = 0, hiddenAt = 0;
+  function connect() {
+    if (es) es.close();
+    es = new EventSource("/api/events"); lastMsg = Date.now();
+    es.onmessage = (e) => {
+      lastMsg = Date.now();
+      const ev = JSON.parse(e.data); if (ev.type === "ping") return;
+      if (ev.type === "snapshot") { S.devices = new Map(ev.devices.map((d) => [d.id, keepAims(d)])); renderAll(); }
+      else if (ev.type === "device") { S.devices.set(ev.device.id, keepAims(ev.device)); renderAll(); }
+      else if (ev.type === "removed") { S.devices.delete(ev.device_id); if (S.sel === ev.device_id) closeSheet(); renderAll(); }
+      else if (ev.type === "state") { const d = S.devices.get(ev.device_id); if (d && d.points[ev.key] && S.drag !== ev.key) {
+        const v = aimed(d.id, ev.key, ev.value); if (d.points[ev.key].value === v) return; d.points[ev.key].value = v; renderDevice(d.id); } }
+      else if (ev.type === "online") { const d = S.devices.get(ev.device_id); if (d) { d.online = ev.online; renderDevice(d.id); } }
+    };
+    es.onerror = () => { clearTimeout(lostT); lostT = setTimeout(() => { $("sub").textContent = "Reconnexion…"; }, 4000); };
+    es.onopen = () => { clearTimeout(lostT); renderHeader(); };
+  }
+  connect();
+  setInterval(() => { if (!document.hidden && Date.now() - lastMsg > 40000) connect(); }, 5000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (Date.now() - hiddenAt > 2000 || Date.now() - lastMsg > 20000) { connect(); loadMe().then(renderAll); }
+  });
+  addEventListener("pageshow", (e) => { if (e.persisted) connect(); });
+  addEventListener("online", connect);
 })();
 </script>
 </body>

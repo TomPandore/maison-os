@@ -30,7 +30,7 @@ from ..integrations import homeassistant as ha
 from .people import People
 
 MAX_BODY = 256 * 1024
-PING_S = 25  # silence max du flux d'événements avant un « ping »
+PING_S = 15  # silence max du flux avant un « ping » (visible par l'appli : elle se reconnecte sans)
 
 
 class HostGuard:
@@ -175,13 +175,15 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
 
     async def events(request: Request) -> Response:
         async def stream():
-            snapshot = {"type": "snapshot", "devices": [d.to_json() for d in hub.devices.values()]}
-            yield f"data: {json.dumps(snapshot, ensure_ascii=False)}\n\n"
+            # S'abonner AVANT la photo de la maison : rien ne se perd entre les deux.
             agen = hub.subscribe()
             # On attend l'événement suivant SANS l'annuler au bout du délai : annuler `__anext__`
             # (comme le fait `wait_for`) refermait l'abonnement, et le flux mourait au 1er silence.
             nxt = asyncio.ensure_future(agen.__anext__())
             try:
+                await asyncio.sleep(0)  # laisse l'abonnement s'inscrire
+                snapshot = {"type": "snapshot", "devices": [d.to_json() for d in hub.devices.values()]}
+                yield f"data: {json.dumps(snapshot, ensure_ascii=False)}\n\n"
                 while True:
                     done, _ = await asyncio.wait({nxt}, timeout=PING_S)
                     if nxt in done:
@@ -189,7 +191,7 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
                         nxt = asyncio.ensure_future(agen.__anext__())
                         yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
                     else:
-                        yield ": ping\n\n"
+                        yield 'data: {"type": "ping"}\n\n'
                     if await request.is_disconnected():
                         break
             finally:

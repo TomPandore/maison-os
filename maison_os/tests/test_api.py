@@ -150,8 +150,8 @@ async def test_event_stream_survives_quiet_periods(stack, monkeypatch):
         pings = 0
         while pings < 3:  # au moins 3 silences de suite
             line = await asyncio.wait_for(lines.__anext__(), 3)
-            if line.startswith(": ping"):
-                pings += 1
+            if line.startswith("data: ") and json.loads(line.removeprefix("data: ")).get("type") == "ping":
+                pings += 1  # un vrai message : l'appli voit que le flux est vivant
         await stack["fake"].set_attr(2, "1/6/0", False)
         while True:
             line = await asyncio.wait_for(lines.__anext__(), 3)
