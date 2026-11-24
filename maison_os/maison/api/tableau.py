@@ -101,7 +101,24 @@ def validate_layout(raw: Any) -> dict[str, Any]:
             out["strip"] = {k: _frac(s.get(k), f"lights[{i}].strip.{k}") for k in ("x1", "y1", "x2", "y2")}
         lights.append(out)
 
+    cards_raw = raw.get("cards", [])
+    if not isinstance(cards_raw, list) or len(cards_raw) > MAX_LIGHTS:
+        raise LayoutError(f"cards : liste de {MAX_LIGHTS} cartes au plus")
+    cards = []
+    for i, c in enumerate(cards_raw):
+        if not isinstance(c, dict):
+            raise LayoutError(f"cards[{i}] : objet attendu")
+        card = {"device": _text(c.get("device"), f"cards[{i}].device", 120)}
+        for k in ("image", "mask"):
+            name = _text(c.get(k), f"cards[{i}].{k}", 50)
+            if not IMAGE_NAME.match(name):
+                raise LayoutError(f"cards[{i}].{k} : nom de fichier invalide")
+            card[k] = name
+        cards.append(card)
+
     layout: dict[str, Any] = {"floors": floors, "lights": lights}
+    if cards:
+        layout["cards"] = cards
     sun = raw.get("sun")
     if sun is not None:
         if not isinstance(sun, dict):

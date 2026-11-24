@@ -92,6 +92,40 @@
   .alloff:not(:disabled):hover { background: var(--track); }
   .alloff:active { transform: scale(.96); }
   .alloff:disabled { opacity: .35; }
+  /* carte dédiée (fusée) : ciel de nuit */
+  .fx { margin: 6px 10px 10px; border-radius: 22px; padding: 18px; color: #f5f5f7; position: relative; overflow: hidden; display: grid; gap: 16px;
+    background: radial-gradient(120% 80% at 30% 0%, #22305c, #0d1226 70%); }
+  .fx::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(1.2px 1.2px at 12% 18%, #fff8, transparent),
+    radial-gradient(1px 1px at 72% 12%, #fff9, transparent), radial-gradient(1.5px 1.5px at 85% 40%, #ffd96a, transparent), radial-gradient(1px 1px at 40% 8%, #fff7, transparent),
+    radial-gradient(1px 1px at 92% 70%, #fff6, transparent), radial-gradient(1.3px 1.3px at 8% 60%, #fff6, transparent); }
+  .fx > * { position: relative; }
+  .fx-top { display: grid; grid-template-columns: 112px 1fr; gap: 16px; align-items: center; }
+  .fx h4 { font-size: 1.3rem; letter-spacing: -.02em; line-height: 1.15; }
+  .fx .st { opacity: .7; font-size: .88rem; margin: 3px 0 12px; }
+  .fx .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .fx .lbl { font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .6; margin-bottom: 8px; }
+  .rk { position: relative; aspect-ratio: 540/1077; --c: #3b82f6; }
+  .rk img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .rk .tint, .rk .lum { position: absolute; inset: 0; -webkit-mask: var(--m) center/100% 100% no-repeat; mask: var(--m) center/100% 100% no-repeat; transition: background .4s, opacity .4s; }
+  .rk .tint { background: var(--c); mix-blend-mode: color; opacity: .95; }
+  .rk .lum { background: radial-gradient(60% 45% at 50% 55%, #fff 0%, transparent 70%); mix-blend-mode: soft-light; opacity: .7; }
+  .rk .glow { position: absolute; inset: -20% -60%; background: radial-gradient(closest-side, var(--c), transparent); opacity: .45; filter: blur(18px); transition: opacity .4s, background .4s; }
+  .rk.off .tint { background: #1b2030; mix-blend-mode: multiply; opacity: .55; } .rk.off .lum, .rk.off .glow { opacity: 0; }
+  .fx-dots { display: grid; grid-template-columns: repeat(5, 30px); gap: 10px 14px; }
+  .fx-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+  .fx-dot.sel { box-shadow: 0 0 0 2px #0d1226, 0 0 0 4px var(--c); }
+  .fx-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .fx-chip { padding: 7px 13px; border-radius: 99px; font-size: .84rem; font-weight: 600; background: rgba(255,255,255,.1); }
+  .fx-chip.sel { background: #fff; color: #0d1226; }
+  .fx-prog { background: rgba(255,255,255,.07); border-radius: 18px; padding: 12px 14px; display: grid; gap: 10px; }
+  .fx-time { display: flex; align-items: center; gap: 2px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fx-time select { appearance: none; -webkit-appearance: none; background: rgba(255,255,255,.1); color: inherit; border: 0; border-radius: 8px; padding: 4px 6px; font: inherit; }
+  .fx-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fx-acts button { background: rgba(255,255,255,.1); border-radius: 14px; padding: 11px; font-weight: 600; font-size: .88rem; }
+  .fx-acts .go { grid-column: 1 / -1; background: linear-gradient(90deg, #fb923c, #f97316); color: #1a0f05; }
+  .fx button:active { transform: scale(.96); }
+  .fx button:disabled, .fx select:disabled { opacity: .4; }
+  .fx .switch { flex: none; }
   .scenes { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px 16px 10px; }
   .scenes button { padding: 7px 14px; border-radius: 99px; font-size: .85rem; font-weight: 600; background: var(--track); }
   .scenes button:active { transform: scale(.96); }
@@ -318,7 +352,8 @@ async function send(id, key, value) {
   d.points[key].value = value;
   if (key === "color_temp" && d.points.color_mode) d.points.color_mode.value = "ct";
   if (key === "color" && d.points.color_mode) d.points.color_mode.value = "hs";
-  if (key !== "on" && d.points.on) d.points.on.value = true;
+  if (["brightness", "color", "color_temp", "effect"].includes(key) && d.points.on) d.points.on.value = true;
+  if (d.points[key].access === "w") d.points[key].value = null;
   renderDevice(id);
   if (!mayCommand(d)) { toast(locked(d) ? `${d.room} : réservé` : "Associe d'abord ce téléphone"); return; }
   const r = await api("/api/command", { method: "POST", headers: auth({ "content-type": "application/json", "x-maison-origin": "ui" }),
@@ -428,11 +463,53 @@ function renderRooms() {
     sc.map((x) => `<button data-scene="${esc(x.id)}" ${roomLocked(room) ? "disabled" : ""}>${esc(x.name)}</button>`).join("")}</div>` : ""; };
   const off = (room) => room ? `<button class="alloff" data-alloff="${esc(room)}" aria-label="Tout éteindre : ${esc(room)}">${POWER}<span>Tout éteindre</span></button>` : "";
   $("rooms").innerHTML = rooms.map((room) => `<div class="room" data-room="${esc(room)}"><div class="rh"><h3>${esc(room || "Sans pièce")}</h3>${off(room)}</div>${chips(room)}${
-    lights.filter((d) => (d.room || "") === room).sort((a, b) => a.name.localeCompare(b.name, "fr")).map((d) =>
+    lights.filter((d) => (d.room || "") === room).sort((a, b) => a.name.localeCompare(b.name, "fr")).map((d) => cardOf(d) ? fxHtml(d, cardOf(d)) :
       `<div class="dev" data-dev="${esc(d.id)}"><button class="ico" data-open="${esc(d.id)}" aria-label="Régler ${esc(d.name)}">${BULB}</button>
         <button class="txt" data-open="${esc(d.id)}"><div class="n">${esc(d.name)}</div><div class="s"></div></button>
         <button class="switch" role="switch" data-toggle="${esc(d.id)}" aria-label="${esc(d.name)}"></button></div>`).join("")}</div>`).join("");
-  lights.forEach((d) => paintRow(d));
+  lights.forEach((d) => { paintRow(d); paintFx(d); });
+}
+
+/* ---------- carte dédiée (ex. la fusée ESPHome) ---------- */
+const FX_COLORS = { "Blanc chaud": "#ffcf8a", "Bleu nuit": "#2b4bb8", "Bleu": "#3b82f6", "Turquoise": "#2dd4bf", "Vert": "#22c55e",
+  "Jaune": "#facc15", "Orange": "#fb923c", "Rouge": "#ef4444", "Rose": "#f472b6", "Violet": "#a855f7" };
+const FX_EFFECT = { "None": "Fixe" };
+const cardOf = (d) => S.layout && (S.layout.cards || []).find((c) => c.device === d.id);
+const fxKey = (d, re) => Object.keys(d.points).find((k) => re.test(k));
+function fxTime(d, hk, mk) {
+  if (!hk || !mk) return "";
+  const opts = (k) => { const p = d.points[k], lo = p.min ?? 0, hi = p.max ?? 59, st = /minute/.test(k) ? 5 : 1, o = [];
+    for (let v = lo; v <= hi; v += st) o.push(`<option value="${v}">${String(v).padStart(2, "0")}</option>`); return o.join(""); };
+  return `<span class="fx-time"><select data-fxnum="${hk}" aria-label="Heure">${opts(hk)}</select>:<select data-fxnum="${mk}" aria-label="Minutes">${opts(mk)}</select></span>`;
+}
+function fxHtml(d, card) {
+  const sel = fxKey(d, /^couleur$/), eff = d.points.effect, sw = fxKey(d, /^programmation/);
+  const btn = (re, label, cls = "") => { const k = Object.keys(d.points).find((x) => re.test(x) && d.points[x].access === "w"); return k ? `<button class="${cls}" data-fxpress="${k}">${label}</button>` : ""; };
+  const dots = sel ? d.points[sel].choices.map((n) => `<button class="fx-dot" data-fxsel="${esc(n)}" title="${esc(n)}" aria-label="${esc(n)}" style="--c:${FX_COLORS[n] || "#ccc"}"></button>`).join("") : "";
+  const chips = eff ? eff.choices.filter((n) => !/collage/i.test(n)).map((n) => `<button class="fx-chip" data-fxeff="${esc(n)}">${esc(FX_EFFECT[n] || n)}</button>`).join("") : "";
+  return `<div class="fx" data-fx="${esc(d.id)}">
+    <div class="fx-top"><div class="rk" style="--m:url('/tableau/media/${esc(card.mask)}')"><div class="glow"></div><img src="/tableau/media/${esc(card.image)}" alt=""><div class="tint"></div><div class="lum"></div></div>
+      <div><h4>${esc(d.name)}</h4><p class="st"></p><div class="row"><span>Allumée</span><button class="switch" role="switch" data-toggle="${esc(d.id)}" aria-label="${esc(d.name)}"></button></div></div></div>
+    ${dots ? `<div><p class="lbl">Couleur</p><div class="fx-dots">${dots}</div></div>` : ""}
+    ${chips ? `<div><p class="lbl">Effet</p><div class="fx-chips">${chips}</div></div>` : ""}
+    ${sw ? `<div class="fx-prog"><div class="row"><span>Programmation auto</span><button class="switch" role="switch" data-fxswitch="${sw}" aria-label="Programmation automatique"></button></div>
+      <div class="row"><span>🌙 Coucher</span>${fxTime(d, fxKey(d, /^coucher.*heure/), fxKey(d, /^coucher.*minute/))}</div>
+      <div class="row"><span>🌿 Réveil vert</span>${fxTime(d, fxKey(d, /^reveil.*heure/), fxKey(d, /^reveil.*minute/))}</div></div>` : ""}
+    <div class="fx-acts">${btn(/^mode_nuit/, "🌙 Mode nuit")}${btn(/^reveil_vert/, "🌿 Réveil vert")}${btn(/^decollage$/, "🚀 Décollage !", "go")}</div>
+  </div>`;
+}
+function paintFx(d) {
+  const el = document.querySelector(`.fx[data-fx="${CSS.escape(d.id)}"]`); if (!el) return;
+  const on = isOn(d), ok = d.online && mayCommand(d), sel = fxKey(d, /^couleur$/), col = pv(d, "color") || "#3b82f6";
+  const rk = el.querySelector(".rk"); rk.classList.toggle("off", !on); rk.style.setProperty("--c", col);
+  const eff = pv(d, "effect");
+  el.querySelector(".st").textContent = !d.online ? "Hors ligne" : locked(d) ? "Réservé" : on ? `Allumée · ${(sel && pv(d, sel)) || ""}${eff && eff !== "None" ? " · " + eff : ""}` : "Éteinte";
+  const t = el.querySelector("[data-toggle]"); t.setAttribute("aria-checked", String(on)); t.disabled = !ok;
+  el.querySelectorAll("[data-fxsel]").forEach((b) => { b.classList.toggle("sel", on && b.dataset.fxsel === pv(d, sel)); b.disabled = !ok; });
+  el.querySelectorAll("[data-fxeff]").forEach((b) => { b.classList.toggle("sel", on && b.dataset.fxeff === (eff || "None")); b.disabled = !ok; });
+  el.querySelectorAll("[data-fxswitch]").forEach((b) => { b.setAttribute("aria-checked", String(!!pv(d, b.dataset.fxswitch))); b.disabled = !ok; });
+  el.querySelectorAll("[data-fxnum]").forEach((x) => { const v = pv(d, x.dataset.fxnum); if (v != null && document.activeElement !== x) x.value = String(v); x.disabled = !ok; });
+  el.querySelectorAll("[data-fxpress]").forEach((b) => { b.disabled = !ok; });
 }
 function paintOff() {
   const lockedRoom = (room) => unpaired() || (!!S.me.person && S.me.deny_rooms.includes(room.trim().toLowerCase()));
@@ -482,7 +559,7 @@ function paintTemp(k, lo, hi) {
 }
 function renderDevice(id) {
   const d = S.devices.get(id); if (!d) return;
-  paintLight(d); paintRow(d); if (S.sel === id) renderSheet(); renderHeader();
+  paintLight(d); paintRow(d); paintFx(d); if (S.sel === id) renderSheet(); renderHeader();
 }
 function renderAll() { renderHeader(); renderFloors(); renderStage(); renderRooms(); renderSheet(); }
 
@@ -562,6 +639,14 @@ slider($("temp"), "color_temp", (x) => { const d = S.devices.get(S.sel), [lo, hi
 
 /* ---------- gestes ---------- */
 document.addEventListener("click", (e) => {
+  const fx = e.target.closest(".fx");
+  if (fx) {
+    const id = fx.dataset.fx, d = S.devices.get(id), b = e.target.closest("button");
+    if (b && b.dataset.fxsel) { send(id, fxKey(d, /^couleur$/), b.dataset.fxsel); return; }
+    if (b && b.dataset.fxeff) { send(id, "effect", b.dataset.fxeff); return; }
+    if (b && b.dataset.fxswitch) { send(id, b.dataset.fxswitch, !pv(d, b.dataset.fxswitch)); return; }
+    if (b && b.dataset.fxpress) { send(id, b.dataset.fxpress, true); toast(b.textContent.trim()); return; }
+  }
   const ao = e.target.closest("[data-alloff]");
   if (ao) { allOff(ao.dataset.alloff, ao); return; }
   const sc = e.target.closest("[data-scene]");
@@ -604,6 +689,8 @@ async function runScene(id, btn) {
   if (r.ok) toast(r.data.held && r.data.held.length ? `${name} : en attente de validation` : `${name} ✓`);
   else toast((r.data && (r.data.message || r.data.error)) || "Refusé");
 }
+
+document.addEventListener("change", (e) => { const x = e.target.closest("[data-fxnum]"); if (x) send(x.closest(".fx").dataset.fx, x.dataset.fxnum, Number(x.value)); });
 
 /* ---------- association du téléphone ---------- */
 async function loadMe() {

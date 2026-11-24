@@ -25,6 +25,7 @@ async def house(tmp_path, monkeypatch):
     await srv.start()
     raw = _merge(DEFAULTS, {
         "drivers": {"matter": {"url": srv.url, "read_only": False}},
+        "guard": {"protected_rooms": ["Chambre"]},
         "people": {"require_pairing": True, "profiles": [
             {"name": "Parent"}, {"name": "Invitée", "deny_rooms": ["Bureau"]}]},
     })
@@ -109,3 +110,13 @@ async def test_install_manifest(house):
     assert sw.status_code == 200 and "fetch" in sw.text
     page = (await http.get("/")).text
     assert 'rel="manifest"' in page and json  # la page déclare l'appli
+
+
+async def test_paired_phone_is_a_person_in_a_protected_room(house):
+    http, hub = house["http"], house["hub"]
+    assert (await http.put(f"/api/labels/{UID2}", json={"room": "Chambre", "pin": PIN})).status_code == 200
+    key = (await http.post("/api/associer", json={"person": "Invitée", "pin": PIN})).json()["key"]
+    r = await http.post("/api/command", json=cmd(UID2), headers={"x-maison-cle": key, "x-maison-origin": "ui"})
+    assert r.status_code == 200  # pas retenu : le téléphone a été associé avec le code
+    r = await http.post("/api/command", json=cmd(UID2, True), headers={"x-maison-cle": key})
+    assert r.status_code == 202  # un script, lui, attend toujours la validation

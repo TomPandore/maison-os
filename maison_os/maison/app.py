@@ -21,6 +21,7 @@ from .core.guard import GuardPolicy
 from .core.hub import Hub
 from .core.scenes import load_scenes
 from .drivers.matter import MatterDriver
+from .drivers.esphome import EspHomeDriver
 from .drivers.tuya import TuyaDriver
 from .integrations.homeassistant import DEFAULT_URL as DEFAULT_HA_URL
 
@@ -42,6 +43,9 @@ def build_hub(cfg: Config) -> Hub:
     keys = cfg.data_dir / str(t.get("keys_file", "tuya.json"))
     if t.get("enabled", keys.exists()):  # actif dès qu'il y a des clés locales
         hub.add_driver(TuyaDriver(keys, read_only=bool(t.get("read_only", True)), poll_s=float(t.get("poll_s", 5))))
+    e = drivers.get("esphome") or {}
+    if e.get("devices") and e.get("enabled", True):
+        hub.add_driver(EspHomeDriver(list(e["devices"]), read_only=bool(e.get("read_only", True))))
     return hub
 
 

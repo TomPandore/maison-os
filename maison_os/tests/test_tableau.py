@@ -18,6 +18,7 @@ PLAN = {
         {"device": "tuya:BBBB", "floor": "etage", "x": 0.6, "y": 0.66, "strip": {"x1": 0.4, "y1": 0.7, "x2": 0.7, "y2": 0.6}},
     ],
     "sun": {"lat": 45.12345, "lon": 5.67891},
+    "cards": [{"device": "esphome:aa", "image": "fusee.png", "mask": "fusee-masque.png", "x": 1}],
     "inconnu": "ignoré",
 }
 
@@ -29,6 +30,7 @@ def test_validate_keeps_only_known_fields_and_rounds_position():
     assert "strip" in lay["lights"][1]
     assert lay["sun"] == {"lat": 45.1, "lon": 5.7}  # ~10 km, jamais l'adresse exacte
     assert "inconnu" not in lay
+    assert lay["cards"] == [{"device": "esphome:aa", "image": "fusee.png", "mask": "fusee-masque.png"}]
 
 
 @pytest.mark.parametrize("bad", [
@@ -41,6 +43,7 @@ def test_validate_keeps_only_known_fields_and_rounds_position():
     {"floors": [{"id": "rdc", "name": "RDC", "image": "a.webp"}], "lights": [{"device": "x:1", "floor": "rdc", "x": True, "y": 0.1}]},
     {"floors": [{"id": "rdc", "name": "<b>\x00</b>", "image": "a.webp"}]},
     {"floors": [{"id": "rdc", "name": "RDC", "image": "a.webp"}], "sun": {"lat": 200, "lon": 0}},
+    {"floors": [{"id": "rdc", "name": "RDC", "image": "a.webp"}], "cards": [{"device": "x:1", "image": "../a.png", "mask": "m.png"}]},
 ])
 def test_validate_rejects(bad):
     with pytest.raises(LayoutError):

@@ -127,7 +127,8 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
                               origin="ui", result="refusé", reason=f"{dev.effective_room} fermé à ce profil")
             return JSONResponse({"status": "error", "message": f"{dev.effective_room} : réservé, pas pour ce profil"}, status_code=403)
         if request.headers.get("x-maison-origin") == "ui":
-            origin = Origin.UI if pins.check(data.get("pin"), _caller(request)) else Origin.HOUSEHOLD
+            # un téléphone associé (avec le code, une fois) = une personne de la maison
+            origin = Origin.UI if profile or pins.check(data.get("pin"), _caller(request)) else Origin.HOUSEHOLD
         else:
             origin = Origin.API
         actor = f"{profile.name}@{_caller(request)}" if profile else str(data.get("actor") or origin.value)
@@ -261,7 +262,7 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
         if profile and any(not profile.may_use(r) for r in rooms if r):
             return JSONResponse({"status": "error", "message": f"{sc.name} : réservé, pas pour ce profil"}, status_code=403)
         actor = f"{profile.name}@{_caller(request)}" if profile else f"personne@{_caller(request)}"
-        res = await run_scene(hub, sc, origin=Origin.HOUSEHOLD, actor=actor[:64])
+        res = await run_scene(hub, sc, origin=Origin.UI if profile else Origin.HOUSEHOLD, actor=actor[:64])
         return JSONResponse(res, status_code=200 if res["status"] == "done" else 400)
 
     async def room_all_off(request: Request) -> Response:
@@ -280,7 +281,7 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
         if profile and not profile.may_use(sc.room):
             return JSONResponse({"status": "error", "message": f"{sc.room} : réservé, pas pour ce profil"}, status_code=403)
         actor = f"{profile.name}@{_caller(request)}" if profile else f"personne@{_caller(request)}"
-        res = await run_scene(hub, sc, origin=Origin.HOUSEHOLD, actor=actor[:64])
+        res = await run_scene(hub, sc, origin=Origin.UI if profile else Origin.HOUSEHOLD, actor=actor[:64])
         return JSONResponse(res, status_code=200 if res["status"] == "done" else 400)
 
     async def me(request: Request) -> Response:
