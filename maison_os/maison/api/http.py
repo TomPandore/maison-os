@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import json
 from typing import Any
@@ -26,6 +27,7 @@ from ..core.model import Origin
 from ..integrations import homeassistant as ha
 
 MAX_BODY = 256 * 1024
+PING_S = 25  # silence max du flux d'événements avant un « ping »
 
 
 class HostGuard:
@@ -160,16 +162,24 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
             snapshot = {"type": "snapshot", "devices": [d.to_json() for d in hub.devices.values()]}
             yield f"data: {json.dumps(snapshot, ensure_ascii=False)}\n\n"
             agen = hub.subscribe()
+            # On attend l'événement suivant SANS l'annuler au bout du délai : annuler `__anext__`
+            # (comme le fait `wait_for`) refermait l'abonnement, et le flux mourait au 1er silence.
+            nxt = asyncio.ensure_future(agen.__anext__())
             try:
                 while True:
-                    try:
-                        ev = await asyncio.wait_for(agen.__anext__(), timeout=25)
+                    done, _ = await asyncio.wait({nxt}, timeout=PING_S)
+                    if nxt in done:
+                        ev = nxt.result()
+                        nxt = asyncio.ensure_future(agen.__anext__())
                         yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                    except TimeoutError:
+                    else:
                         yield ": ping\n\n"
                     if await request.is_disconnected():
                         break
             finally:
+                nxt.cancel()
+                with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
+                    await nxt
                 await agen.aclose()
 
         return StreamingResponse(stream(), media_type="text/event-stream", headers={"cache-control": "no-cache"})
@@ -226,7 +236,7 @@ def build_routes(hub: Hub, pins: PinGuard, house_name: str, ha_url: str = ha.DEF
         return HTMLResponse(STATUS_PAGE.replace("{{house}}", house_name))
 
     return [
-        Route("/", index),
+        Route("/etat", index),
         Route("/api/health", health),
         Route("/api/devices", devices),
         Route("/api/devices/{device_id:path}", device),

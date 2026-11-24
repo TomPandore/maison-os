@@ -52,6 +52,7 @@ async def test_rest_and_pin(stack):
     h = (await http.get("/api/health")).json()
     assert h["devices"] == 3 and h["pin_configured"] and h["drivers"]["matter"]["state"] == "running"
     assert (await http.get("/")).status_code == 200
+    assert (await http.get("/etat")).status_code == 200
 
     # étiquettes : seulement avec le code
     r = await http.put(f"/api/labels/{UID1}", json={"room": "Chambre enfant"})
@@ -136,3 +137,23 @@ async def test_event_stream(stack):
                 if ev.get("type") == "state":
                     assert ev["device_id"] == UID2 and ev["key"] == "on" and ev["value"] is False
                     break
+
+
+async def test_event_stream_survives_quiet_periods(stack, monkeypatch):
+    """Un flux sans événement pendant plusieurs pings doit rester ouvert et livrer la suite."""
+    from maison.api import http as http_mod
+    monkeypatch.setattr(http_mod, "PING_S", 0.2)
+    http = stack["http"]
+    async with http.stream("GET", "/api/events") as resp:
+        lines = resp.aiter_lines()
+        await asyncio.wait_for(lines.__anext__(), 3)  # snapshot
+        pings = 0
+        while pings < 3:  # au moins 3 silences de suite
+            line = await asyncio.wait_for(lines.__anext__(), 3)
+            if line.startswith(": ping"):
+                pings += 1
+        await stack["fake"].set_attr(2, "1/6/0", False)
+        while True:
+            line = await asyncio.wait_for(lines.__anext__(), 3)
+            if line.startswith("data: ") and json.loads(line.removeprefix("data: ")).get("type") == "state":
+                break

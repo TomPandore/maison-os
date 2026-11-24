@@ -14,6 +14,7 @@ from starlette.routing import Mount
 
 from .api.http import HostGuard, build_routes
 from .api.mcp_tools import build_mcp
+from .api.tableau import build_tableau_routes
 from .config import Config, PinGuard
 from .core.guard import GuardPolicy
 from .core.hub import Hub
@@ -58,7 +59,8 @@ def build_app(cfg: Config, hub: Hub | None = None) -> Starlette:
             await hub.stop()
 
     app = Starlette(
-        routes=[*build_routes(hub, pins, house, ha_url=str((cfg.raw.get("homeassistant") or {}).get("url") or DEFAULT_HA_URL)),
+        routes=[*build_tableau_routes(cfg.data_dir, house),
+                *build_routes(hub, pins, house, ha_url=str((cfg.raw.get("homeassistant") or {}).get("url") or DEFAULT_HA_URL)),
                 Mount("/", app=mcp_app)],
         middleware=[Middleware(HostGuard, allowed=list(cfg.raw.get("allowed_hosts", [])))],
         lifespan=lifespan,

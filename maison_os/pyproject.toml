@@ -1,6 +1,6 @@
 [project]
 name = "maison-os"
-version = "0.2.0"
+version = "0.3.0"
 description = "Domotique légère de la maison, pilotable par des agents (MCP), branchée sur les briques officielles (Matter Server…)"
 requires-python = ">=3.12"
 dependencies = [
@@ -24,3 +24,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["maison*"]
+
+[tool.setuptools.package-data]
+"maison.api" = ["static/*.html"]

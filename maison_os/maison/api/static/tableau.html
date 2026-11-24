@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>{{house}}</title>
+<style>
+  :root {
+    --bg1: #fbfaf7; --bg2: #ebe7e0; --text: #1d1d1f; --muted: #6e6e73;
+    --card: rgba(255,255,255,.68); --card-line: rgba(255,255,255,.75); --line: rgba(60,60,67,.12);
+    --track: rgba(120,120,128,.16); --green: #34c759; --sheet: rgba(255,255,255,.76);
+    --seg: rgba(118,118,128,.14); --seg-on: #fff; --shadow: rgba(0,0,0,.10); --ring: #1d1d1f;
+    --panel1: #ffffff; --panel2: #e6e1d8;
+    font: 100%/1.45 system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg1: #1c1c1e; --bg2: #0e0e10; --text: #f5f5f7; --muted: #98989d;
+      --card: rgba(44,44,46,.62); --card-line: rgba(255,255,255,.08); --line: rgba(84,84,88,.45);
+      --track: rgba(120,120,128,.32); --green: #30d158; --sheet: rgba(30,30,32,.78);
+      --seg: rgba(118,118,128,.24); --seg-on: #636366; --shadow: rgba(0,0,0,.45); --ring: #f5f5f7;
+      --panel1: #2c2e35; --panel2: #151619;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { background: var(--bg2); }
+  body { min-height: 100dvh; color: var(--text); -webkit-font-smoothing: antialiased;
+    background: radial-gradient(120% 60% at 50% 0%, var(--bg1) 0%, var(--bg2) 100%) fixed; overflow-x: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible, [tabindex]:focus-visible { outline: 3px solid #0a84ff; outline-offset: 2px; border-radius: 10px; }
+
+  .top { padding: max(22px, env(safe-area-inset-top)) 20px 6px; position: relative; z-index: 3; }
+  h1 { font-size: 2.125rem; line-height: 1.05; letter-spacing: -0.022em; font-weight: 700; }
+  .sub { margin-top: 4px; font-size: .95rem; color: var(--muted); letter-spacing: -0.005em; min-height: 1.4em; }
+  .seg { margin-top: 14px; display: inline-flex; padding: 3px; border-radius: 12px; background: var(--seg); }
+  .seg button { padding: 7px 16px; border-radius: 9px; font-size: .875rem; font-weight: 600; color: var(--muted);
+    transition: background-color .2s, color .2s, box-shadow .2s; }
+  .seg button[aria-selected="true"] { background: var(--seg-on); color: var(--text);
+    box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 0 1px rgba(0,0,0,.2); }
+  .seg button:active { transform: scale(.97); }
+
+  .wrap { position: relative; width: 100%; height: min(112vw, 58vh); overflow: hidden; touch-action: manipulation; }
+  .wrap.night { background: radial-gradient(90% 80% at 50% 40%, #2b2e37 0%, #14151a 100%); border-radius: 28px; margin: 4px 10px 0; width: auto;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: background-color .8s; }
+  .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform;
+    transition: transform .55s cubic-bezier(.2,.85,.25,1); }
+  .stage img { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none;
+    transition: opacity .35s ease, filter .8s ease; }
+  .stage img.old { opacity: 0; }
+  .stage.night img { filter: brightness(.42) saturate(.8) contrast(1.05); }
+  .glow { position: absolute; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%);
+    transition: opacity .45s ease; }
+  .stage.night .glow, .stage.night .strip { mix-blend-mode: screen; }
+  .strip { position: absolute; pointer-events: none; transform-origin: 0 50%; border-radius: 99px; transition: opacity .45s ease; }
+  .spot { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
+    display: grid; place-items: center; transform: scale(var(--inv, 1)); transition: transform .55s cubic-bezier(.2,.85,.25,1); }
+  .spot i { width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,.92);
+    box-shadow: 0 0 0 2px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.25); transition: background-color .3s, box-shadow .3s, transform .2s; }
+  .spot.on i { background: var(--c); box-shadow: 0 0 0 3px #fff, 0 0 16px 4px var(--c), 0 2px 8px rgba(0,0,0,.25); }
+  .spot.off-line i { background: transparent; box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 0 0 4px rgba(0,0,0,.2); }
+  .spot.sel i { transform: scale(1.25); box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--ring), 0 0 16px 4px var(--c, transparent); }
+  .spot:active i { transform: scale(.9); }
+
+  .rooms { padding: 8px 16px calc(40px + env(safe-area-inset-bottom)); display: grid; gap: 14px; position: relative; z-index: 2; }
+  .room { background: var(--card); border: 1px solid var(--card-line); border-radius: 22px; padding: 6px 0;
+    backdrop-filter: blur(20px) saturate(170%); -webkit-backdrop-filter: blur(20px) saturate(170%); box-shadow: 0 6px 24px var(--shadow); }
+  .room h3 { font-size: .75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 10px 16px 4px; }
+  .dev { display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 16px; width: 100%; text-align: left; }
+  .dev + .dev { border-top: 1px solid var(--line); }
+  .dev .ico { width: 34px; height: 34px; border-radius: 50%; flex: none; background: var(--track); display: grid; place-items: center; }
+  .dev .ico svg { width: 18px; height: 18px; stroke: var(--muted); }
+  .dev.on .ico { background: var(--c); box-shadow: 0 0 14px -2px var(--c); }
+  .dev.on .ico svg { stroke: #1d1d1f; }
+  .dev .txt { flex: 1; min-width: 0; display: block; text-align: left; }
+  .dev .n { font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dev .s { font-size: .82rem; color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 30px 10px; }
+
+  .switch { width: 51px; height: 31px; flex: none; border-radius: 99px; background: var(--track); position: relative; transition: background-color .25s; }
+  .switch::after { content: ""; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
+    box-shadow: 0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.08); transition: transform .3s cubic-bezier(.3,1.4,.6,1); }
+  .switch[aria-checked="true"] { background: var(--green); }
+  .switch[aria-checked="true"]::after { transform: translateX(20px); }
+  .switch:disabled { opacity: .4; }
+
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; max-height: 78dvh; overflow: hidden;
+    padding: 8px 20px calc(26px + env(safe-area-inset-bottom)); border-radius: 28px 28px 0 0;
+    background: var(--sheet); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%);
+    box-shadow: 0 -10px 40px var(--shadow); border-top: 1px solid var(--card-line); transform: translateY(110%); touch-action: none; }
+  .sheet[hidden] { display: block; visibility: hidden; }
+  .grab { width: 38px; height: 5px; border-radius: 3px; background: rgba(120,120,128,.4); margin: 0 auto 14px; }
+  .shead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 2px; cursor: grab; }
+  .shead h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; }
+  .sroom { font-size: .85rem; color: var(--muted); margin-top: 1px; }
+  .label { font-size: .72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 18px 0 8px; }
+  .bar { height: 46px; border-radius: 14px; background: var(--track); overflow: hidden; position: relative; touch-action: none; cursor: ew-resize; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; background: linear-gradient(90deg, var(--c1, #ffe2b8), var(--c2, #ffbf66)); }
+  .bar b { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: .95rem; font-weight: 600; color: #1d1d1f; mix-blend-mode: normal; }
+  .temp { height: 30px; border-radius: 99px; position: relative; touch-action: none; cursor: ew-resize; margin: 0 4px;
+    background: linear-gradient(90deg, #ffa95a, #ffe7cc 45%, #f4f4f2 62%, #cfe0ff); }
+  .temp em { position: absolute; top: 50%; left: 30%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%;
+    border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.25); background: var(--k, #ffc27a); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .swatches button { width: 33px; height: 33px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); transition: transform .15s; }
+  .swatches button[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--bg1), 0 0 0 5px var(--ring); }
+  .swatches button:active { transform: scale(.9); }
+  .hold { margin-top: 18px; padding: 14px; border-radius: 16px; background: rgba(255,159,10,.14); }
+  .hold p { font-size: .9rem; font-weight: 600; }
+  .hold form { display: flex; gap: 8px; margin-top: 10px; }
+  .hold input { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; padding: 10px 12px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--bg1); color: var(--text); letter-spacing: .2em; }
+  .hold form button { padding: 0 16px; border-radius: 12px; background: var(--text); color: var(--bg1); font-weight: 600; }
+  .dim { opacity: .35; pointer-events: none; transition: opacity .25s; }
+
+  .toast { position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top)); z-index: 20; transform: translate(-50%, -150%);
+    padding: 10px 16px; border-radius: 14px; background: rgba(28,28,30,.92); color: #fff; font-size: .9rem; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25); transition: transform .35s cubic-bezier(.2,.85,.25,1); max-width: 90vw; }
+  .toast.show { transform: translate(-50%, 0); }
+
+  /* ---------- ordinateur : la maison entière au centre d'un panneau, les pièces à gauche ---------- */
+  @media (min-width: 900px) {
+    main { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; grid-template-rows: auto 1fr;
+      gap: 0 28px; max-width: 1500px; margin: 0 auto; padding: 0 28px 28px; min-height: 100dvh; }
+    .top { grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 30px 4px 20px; }
+    .top .seg { margin-top: 0; }
+    .rooms { grid-column: 1; grid-row: 2; padding: 0; align-content: start; max-height: calc(100dvh - 150px); overflow: auto; }
+    .wrap, .wrap.night { grid-column: 2; grid-row: 2; width: auto; margin: 0; height: calc(100dvh - 150px); min-height: 460px;
+      border-radius: 30px; box-shadow: 0 12px 40px var(--shadow), inset 0 0 0 1px var(--card-line); }
+    .wrap:not(.night) { background: radial-gradient(80% 75% at 50% 45%, var(--panel1) 0%, var(--panel2) 100%); }
+    .sheet { left: auto; right: 56px; bottom: 56px; width: 380px; border-radius: 24px; max-height: calc(100dvh - 180px);
+      padding-bottom: 22px; border: 1px solid var(--card-line); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage, .spot, .switch::after, .toast, .seg button { transition: none !important; }
+    .stage img, .glow, .strip { transition: opacity .2s ease !important; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .room, .sheet { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg1); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div><h1>{{house}}</h1>
+    <p class="sub" id="sub" aria-live="polite">Connexion…</p></div>
+    <div class="seg" id="floors" role="tablist" aria-label="Étages" hidden></div>
+  </header>
+  <section class="wrap" id="wrap" aria-label="La maison vue de haut" hidden>
+    <div class="stage" id="stage"></div>
+  </section>
+  <section class="rooms" id="rooms" aria-label="Pièces et lumières"></section>
+</main>
+
+<section class="sheet" id="sheet" role="dialog" aria-labelledby="sName" hidden>
+  <div class="grab" aria-hidden="true"></div>
+  <div class="shead" id="shead">
+    <div><h2 id="sName"></h2><p class="sroom" id="sRoom"></p></div>
+    <button class="switch" id="sToggle" role="switch" aria-checked="false" aria-label="Allumer"></button>
+  </div>
+  <div id="sBody">
+    <div id="cBright"><div class="label" id="lBright">Luminosité</div>
+      <div class="bar" id="bar" role="slider" tabindex="0" aria-labelledby="lBright" aria-valuemin="1" aria-valuemax="100"><i id="barFill"></i><b id="barTxt"></b></div></div>
+    <div id="cTemp"><div class="label" id="lTemp">Blanc</div>
+      <div class="temp" id="temp" role="slider" tabindex="0" aria-labelledby="lTemp"><em id="tempKnob"></em></div></div>
+    <div class="swatches" id="swatches" role="group" aria-label="Couleurs"></div>
+  </div>
+  <div class="hold" id="hold" hidden>
+    <p id="holdMsg"></p>
+    <form id="pinForm"><input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Code de la maison" aria-label="Code de la maison"><button>Valider</button></form>
+  </div>
+</section>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const S = { devices: new Map(), layout: null, floor: null, sel: null, night: false, zoom: 1, drag: null, hold: null };
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const BULB = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
+const PRESETS = [
+  { name: "Blanc chaud", ct: 2700 }, { name: "Blanc neutre", ct: 4000 }, { name: "Blanc froid", ct: 6500 },
+  { name: "Rouge", c: "#ff453a" }, { name: "Orange", c: "#ff9f0a" }, { name: "Bleu", c: "#0a84ff" },
+  { name: "Violet", c: "#bf5af2" }, { name: "Vert", c: "#30d158" },
+];
+
+/* ---------- couleurs ---------- */
+function kelvinRgb(k) {
+  const t = k / 100; let r, g, b;
+  if (t <= 66) { r = 255; g = 99.47 * Math.log(t) - 161.12; b = t <= 19 ? 0 : 138.52 * Math.log(t - 10) - 305.04; }
+  else { r = 329.7 * Math.pow(t - 60, -0.1332); g = 288.12 * Math.pow(t - 60, -0.0755); b = 255; }
+  return [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))));
+}
+function hexRgb(h) { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+const css = (rgb, a = 1) => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+const pv = (d, k) => (d && d.points && d.points[k] ? d.points[k].value : undefined);
+const can = (d, k) => !!(d && d.points && d.points[k] && d.points[k].access && d.points[k].access.includes("w"));
+const isLight = (d) => d.kind === "light" || d.kind === "switch";
+const isOn = (d) => !!pv(d, "on") && d.online;
+function lampRgb(d) {
+  const mode = pv(d, "color_mode"), c = hexRgb(pv(d, "color"));
+  if (c && mode && mode !== "ct") return c;
+  const k = pv(d, "color_temp"); return k ? kelvinRgb(k) : [255, 200, 140];
+}
+function level(d) { const b = pv(d, "brightness"); return typeof b === "number" ? b : (isOn(d) ? 100 : 0); }
+
+/* ---------- soleil (mode soir) ---------- */
+function sunHoursUTC(date, lat, lon, rising) {
+  const rad = Math.PI / 180, N = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 864e5), lh = lon / 15;
+  const t = N + ((rising ? 6 : 18) - lh) / 24, M = 0.9856 * t - 3.289;
+  let L = (M + 1.916 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 282.634 + 360) % 360;
+  let RA = (Math.atan(0.91764 * Math.tan(L * rad)) / rad + 360) % 360;
+  RA = (RA + Math.floor(L / 90) * 90 - Math.floor(RA / 90) * 90) / 15;
+  const sinD = 0.39782 * Math.sin(L * rad), cosD = Math.cos(Math.asin(sinD));
+  const cosH = (Math.cos(90.833 * rad) - sinD * Math.sin(lat * rad)) / (cosD * Math.cos(lat * rad));
+  if (cosH > 1 || cosH < -1) return null;
+  const H = (rising ? 360 - Math.acos(cosH) / rad : Math.acos(cosH) / rad) / 15;
+  return ((H + RA - 0.06571 * t - 6.622 - lh) % 24 + 24) % 24;
+}
+const FORCE = new URLSearchParams(location.search).get("mode");
+function isNight() {
+  if (FORCE === "soir") return true;
+  if (FORCE === "jour") return false;
+  const now = new Date(), sun = S.layout && S.layout.sun;
+  if (!sun) { const h = now.getHours(); return h >= 19 || h < 7; }
+  const up = sunHoursUTC(now, sun.lat, sun.lon, true), down = sunHoursUTC(now, sun.lat, sun.lon, false);
+  if (up === null || down === null) return false;
+  const h = now.getUTCHours() + now.getUTCMinutes() / 60;
+  return up < down ? (h < up - 0.25 || h > down + 0.25) : (h > down + 0.25 && h < up - 0.25);
+}
+
+/* ---------- ressort (règle Apple : partir de la valeur affichée) ---------- */
+function spring(from, to, v0, opt, onUpdate, onDone) {
+  if (spring.raf) cancelAnimationFrame(spring.raf);
+  if (REDUCED) { onUpdate(to); onDone && onDone(); return; }
+  const k = (2 * Math.PI / opt.response) ** 2, c = 4 * Math.PI * opt.damping / opt.response;
+  let x = from, v = v0, last = performance.now();
+  const step = (now) => {
+    const dt = Math.min(0.032, (now - last) / 1000); last = now;
+    v += (-k * (x - to) - c * v) * dt; x += v * dt; onUpdate(x);
+    if (Math.abs(v) < 4 && Math.abs(x - to) < 0.5) { onUpdate(to); spring.raf = 0; onDone && onDone(); return; }
+    spring.raf = requestAnimationFrame(step);
+  };
+  spring.raf = requestAnimationFrame(step);
+}
+
+/* ---------- réseau ---------- */
+async function api(path, opts) {
+  try {
+    const r = await fetch(path, opts); let data = null; try { data = await r.json(); } catch (e) {}
+    return { ok: r.ok, status: r.status, data };
+  } catch (e) { return { ok: false, status: 0, data: { error: "Maison injoignable" } }; }
+}
+let toastT = 0;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
+
+async function send(id, key, value) {
+  const d = S.devices.get(id); if (!d || !d.points[key]) return;
+  const before = JSON.stringify(d.points);
+  d.points[key].value = value;
+  if (key === "color_temp" && d.points.color_mode) d.points.color_mode.value = "ct";
+  if (key === "color" && d.points.color_mode) d.points.color_mode.value = "hs";
+  if (key !== "on" && d.points.on) d.points.on.value = true;
+  renderDevice(id);
+  const r = await api("/api/command", { method: "POST", headers: { "content-type": "application/json", "x-maison-origin": "ui" },
+    body: JSON.stringify({ device_id: id, key, value, actor: "tableau" }) });
+  if (r.status === 202 && r.data && r.data.approval_id) {
+    d.points = JSON.parse(before); renderDevice(id);
+    S.hold = { id: r.data.approval_id, device: id };
+    $("holdMsg").textContent = (r.data.message || "Pièce protégée").replace(/^En attente de validation : /, "") + " : entre le code de la maison.";
+    $("hold").hidden = false; $("pin").focus();
+  } else if (!r.ok) {
+    d.points = JSON.parse(before); renderDevice(id);
+    toast((r.data && (r.data.message || r.data.error)) || "Commande refusée");
+  }
+}
+
+/* ---------- dessin ---------- */
+function plural(n) { return n === 0 ? "Tout est éteint" : n === 1 ? "1 lumière allumée" : `${n} lumières allumées`; }
+function renderHeader() {
+  const lights = [...S.devices.values()].filter(isLight);
+  $("sub").textContent = lights.length ? plural(lights.filter(isOn).length) : "Aucune lumière trouvée";
+}
+function renderFloors() {
+  const f = $("floors"), lay = S.layout;
+  if (!lay || lay.floors.length < 2) { f.hidden = true; return; }
+  f.hidden = false;
+  f.innerHTML = lay.floors.map((x) => `<button role="tab" data-floor="${x.id}" aria-selected="${x.id === S.floor}">${esc(x.name)}</button>`).join("");
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
+
+const DESK = matchMedia("(min-width: 900px)");
+function stageSize() {
+  const w = $("wrap").clientWidth, h = $("wrap").clientHeight;
+  const s = DESK.matches ? Math.min(w, h) / 0.9 : w * 1.16;  // ordinateur : toute la maison visible
+  return { w, h, s, left: (w - s) / 2, top: (h - s) / 2 };
+}
+function placeStage() {
+  const g = stageSize(), st = $("stage");
+  st.style.width = st.style.height = g.s + "px"; st.style.left = g.left + "px"; st.style.top = g.top + "px";
+}
+function renderStage() {
+  const lay = S.layout, st = $("stage");
+  if (!lay) { $("wrap").hidden = true; return; }
+  $("wrap").hidden = false; placeStage();
+  const floor = lay.floors.find((x) => x.id === S.floor) || lay.floors[0];
+  const prev = st.querySelector("img");
+  if (!prev || prev.dataset.floor !== floor.id) {
+    const img = new Image(); img.alt = floor.name; img.dataset.floor = floor.id; img.decoding = "async";
+    img.src = "/tableau/media/" + encodeURIComponent(floor.image); img.className = prev ? "old" : "";
+    st.prepend(img);
+    img.onload = () => { requestAnimationFrame(() => img.classList.remove("old")); if (prev) { prev.classList.add("old"); setTimeout(() => prev.remove(), 400); } };
+  }
+  st.querySelectorAll(".glow,.strip,.spot").forEach((n) => n.remove());
+  for (const li of lay.lights.filter((x) => x.floor === floor.id)) {
+    const d = S.devices.get(li.device); if (!d) continue;
+    if (li.glow) { const g = document.createElement("div"); g.className = "glow"; g.dataset.dev = d.id; st.append(g); }
+    if (li.strip) { const s = document.createElement("div"); s.className = "strip"; s.dataset.dev = d.id; st.append(s); }
+    const b = document.createElement("button"); b.className = "spot"; b.dataset.dev = d.id;
+    b.style.left = li.x * 100 + "%"; b.style.top = li.y * 100 + "%"; b.innerHTML = "<i></i>";
+    st.append(b);
+  }
+  for (const id of new Set(lay.lights.map((x) => x.device))) renderDevice(id);
+  st.classList.toggle("night", S.night); $("wrap").classList.toggle("night", S.night); placeStage();
+}
+function paintLight(d) {
+  const st = $("stage"), li = S.layout && S.layout.lights.find((x) => x.device === d.id && x.floor === S.floor);
+  if (!li) return;
+  const on = isOn(d), rgb = lampRgb(d), lv = level(d) / 100, night = S.night;
+  const a = on ? (night ? 0.55 + 0.45 * lv : 0.32 + 0.38 * lv) : 0;
+  st.querySelectorAll(`.glow[data-dev="${CSS.escape(d.id)}"]`).forEach((g) => {
+    const r = li.glow.r * (night ? 1.25 : 1);
+    g.style.left = li.glow.x * 100 + "%"; g.style.top = li.glow.y * 100 + "%";
+    g.style.width = r * 100 + "%"; g.style.height = r * 62 + "%";
+    g.style.background = `radial-gradient(closest-side, ${css(rgb, a)} 0%, ${css(rgb, a * 0.45)} 45%, ${css(rgb, 0)} 100%)`;
+    g.style.opacity = on ? 1 : 0;
+  });
+  st.querySelectorAll(`.strip[data-dev="${CSS.escape(d.id)}"]`).forEach((s) => {
+    const p = li.strip, len = Math.hypot(p.x2 - p.x1, p.y2 - p.y1), ang = Math.atan2(p.y2 - p.y1, p.x2 - p.x1);
+    s.style.left = p.x1 * 100 + "%"; s.style.top = p.y1 * 100 + "%"; s.style.width = len * 100 + "%";
+    s.style.height = "2.2%"; s.style.marginTop = "-1.1%"; s.style.transform = `rotate(${ang}rad)`;
+    s.style.background = css(rgb, on ? Math.min(1, a + 0.25) : 0); s.style.filter = `blur(${night ? 7 : 5}px)`; s.style.opacity = on ? 1 : 0;
+  });
+  const b = st.querySelector(`.spot[data-dev="${CSS.escape(d.id)}"]`);
+  if (b) {
+    b.classList.toggle("on", on); b.classList.toggle("off-line", !d.online); b.classList.toggle("sel", S.sel === d.id);
+    b.style.setProperty("--c", css(rgb)); b.style.setProperty("--inv", (1 / S.zoom).toFixed(3));
+    b.setAttribute("aria-label", `${d.name}, ${stateText(d)}`);
+  }
+}
+function stateText(d) {
+  if (!d.online) return "Hors ligne";
+  if (!isOn(d)) return "Éteinte";
+  const b = pv(d, "brightness"); return typeof b === "number" ? `Allumée · ${b} %` : "Allumée";
+}
+function renderRooms() {
+  const lights = [...S.devices.values()].filter(isLight);
+  if (!lights.length) { $("rooms").innerHTML = `<p class="empty">Aucune lumière pour l'instant.</p>`; return; }
+  const order = (room) => {
+    const lay = S.layout; if (!lay) return 0;
+    const ids = lights.filter((d) => (d.room || "") === room).map((d) => d.id);
+    const li = lay.lights.find((x) => ids.includes(x.device)); return li ? lay.floors.findIndex((f) => f.id === li.floor) : 99;
+  };
+  const rooms = [...new Set(lights.map((d) => d.room || ""))].sort((a, b) => order(a) - order(b) || (a || "~").localeCompare(b || "~", "fr"));
+  $("rooms").innerHTML = rooms.map((room) => `<div class="room"><h3>${esc(room || "Sans pièce")}</h3>${
+    lights.filter((d) => (d.room || "") === room).sort((a, b) => a.name.localeCompare(b.name, "fr")).map((d) =>
+      `<div class="dev" data-dev="${esc(d.id)}"><button class="ico" data-open="${esc(d.id)}" aria-label="Régler ${esc(d.name)}">${BULB}</button>
+        <button class="txt" data-open="${esc(d.id)}"><div class="n">${esc(d.name)}</div><div class="s"></div></button>
+        <button class="switch" role="switch" data-toggle="${esc(d.id)}" aria-label="${esc(d.name)}"></button></div>`).join("")}</div>`).join("");
+  lights.forEach((d) => paintRow(d));
+}
+function paintRow(d) {
+  const row = document.querySelector(`.dev[data-dev="${CSS.escape(d.id)}"]`); if (!row) return;
+  const on = isOn(d); row.classList.toggle("on", on); row.style.setProperty("--c", css(lampRgb(d)));
+  row.querySelector(".s").textContent = stateText(d);
+  const sw = row.querySelector(".switch"); sw.setAttribute("aria-checked", String(on)); sw.disabled = !d.online || !can(d, "on");
+}
+function renderSheet() {
+  const d = S.sel && S.devices.get(S.sel); if (!d) return;
+  $("sName").textContent = d.name; $("sRoom").textContent = `${d.room || "Sans pièce"} · ${stateText(d).toLowerCase()}`;
+  const on = isOn(d), tg = $("sToggle");
+  tg.setAttribute("aria-checked", String(on)); tg.disabled = !d.online || !can(d, "on"); tg.setAttribute("aria-label", on ? "Éteindre" : "Allumer");
+  $("sBody").classList.toggle("dim", !d.online);
+  $("cBright").hidden = !can(d, "brightness");
+  if (S.drag !== "brightness") paintBar(level(d), lampRgb(d));
+  const ct = d.points.color_temp; $("cTemp").hidden = !can(d, "color_temp");
+  if (ct && S.drag !== "color_temp") paintTemp(pv(d, "color_temp") || 3000, ct.min || 2200, ct.max || 6500);
+  const mode = pv(d, "color_mode"), col = (pv(d, "color") || "").toLowerCase(), k = pv(d, "color_temp");
+  const sw = PRESETS.filter((p) => (p.ct ? can(d, "color_temp") : can(d, "color")));
+  $("swatches").innerHTML = sw.map((p) => {
+    const rgb = p.ct ? kelvinRgb(p.ct) : hexRgb(p.c);
+    const cur = hexRgb(col), near = cur && rgb.reduce((a, v, i) => a + (v - cur[i]) ** 2, 0) < 4500;
+    const sel = on && (p.ct ? mode === "ct" && k && Math.abs(k - p.ct) < 250 : mode !== "ct" && near);
+    return `<button style="background:${css(rgb)}" data-preset="${PRESETS.indexOf(p)}" aria-pressed="${!!sel}" aria-label="${p.name}"></button>`;
+  }).join("");
+}
+function paintBar(v, rgb) {
+  $("barFill").style.width = Math.max(4, v) + "%"; $("barTxt").textContent = `${Math.round(v)} %`;
+  $("bar").setAttribute("aria-valuenow", Math.round(v));
+  const light = rgb.map((c) => Math.round(c + (255 - c) * 0.6)); $("barFill").style.setProperty("--c1", css(light)); $("barFill").style.setProperty("--c2", css(rgb));
+}
+function paintTemp(k, lo, hi) {
+  const x = Math.max(0, Math.min(1, (k - lo) / (hi - lo))); $("tempKnob").style.left = x * 100 + "%";
+  $("tempKnob").style.setProperty("--k", css(kelvinRgb(k))); $("temp").setAttribute("aria-valuenow", Math.round(k));
+  $("temp").setAttribute("aria-valuetext", `${Math.round(k)} kelvins`);
+}
+function renderDevice(id) {
+  const d = S.devices.get(id); if (!d) return;
+  paintLight(d); paintRow(d); if (S.sel === id) renderSheet(); renderHeader();
+}
+function renderAll() { renderHeader(); renderFloors(); renderStage(); renderRooms(); renderSheet(); }
+
+/* ---------- zoom sur la pièce ---------- */
+function zoomTo(li) {
+  const st = $("stage"), g = stageSize();
+  if (!li) { S.zoom = 1; st.style.transform = ""; refreshSpots(); return; }
+  const k = DESK.matches ? 1.7 : 2, sheetH = $("sheet").offsetHeight || 320, wrapTop = $("wrap").getBoundingClientRect().top;
+  const visBottom = DESK.matches ? g.h : Math.min(g.h, innerHeight - sheetH - wrapTop - 8), cy = Math.max(70, visBottom / 2);
+  const cx = DESK.matches ? Math.max(g.w * 0.3, (g.w - 420) / 2) : g.w / 2;  // ordinateur : à gauche du panneau de réglages
+  const tx = cx - g.left - k * li.x * g.s, ty = cy - g.top - k * li.y * g.s;
+  S.zoom = k; st.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`; refreshSpots();
+}
+function refreshSpots() { document.querySelectorAll(".spot").forEach((b) => b.style.setProperty("--inv", (1 / S.zoom).toFixed(3))); }
+
+/* ---------- panneau du bas ---------- */
+let sheetY = 0;
+const sheetEl = () => $("sheet");
+function setSheetY(y) { sheetY = y; sheetEl().style.transform = `translateY(${y}px)`; }
+function openSheet(id) {
+  const d = S.devices.get(id); if (!d) return;
+  const li = S.layout && S.layout.lights.find((x) => x.device === id);
+  if (li && li.floor !== S.floor) { S.floor = li.floor; renderFloors(); renderStage(); }
+  const wasOpen = !!S.sel; S.sel = id; $("hold").hidden = true; S.hold = null;
+  const sh = sheetEl(); sh.hidden = false; renderSheet();
+  document.querySelectorAll(".spot").forEach((b) => b.classList.toggle("sel", b.dataset.dev === id));
+  if (!DESK.matches && window.scrollY > 0) window.scrollTo({ top: 0, behavior: REDUCED ? "auto" : "smooth" });
+  const H = sh.offsetHeight; if (!wasOpen) setSheetY(H + 20);
+  spring(sheetY, 0, 0, { response: 0.32, damping: 0.86 }, setSheetY);
+  zoomTo(li && li.floor === S.floor ? li : null);
+}
+function closeSheet(v0 = 0) {
+  if (!S.sel) return; const sh = sheetEl(), H = sh.offsetHeight + 20; S.sel = null; S.hold = null;
+  document.querySelectorAll(".spot.sel").forEach((b) => b.classList.remove("sel"));
+  zoomTo(null);
+  spring(sheetY, H, v0, { response: 0.3, damping: 1 }, setSheetY, () => { if (!S.sel) sh.hidden = true; });
+}
+(function sheetDrag() {
+  const head = $("shead"); let start = null, hist = [];
+  const grabZone = (e) => e.target.closest(".grab, .shead") && !e.target.closest("button");
+  sheetEl().addEventListener("pointerdown", (e) => {
+    if (!grabZone(e)) return; start = { y: e.clientY, s: sheetY }; hist = [[e.clientY, e.timeStamp]];
+    if (spring.raf) cancelAnimationFrame(spring.raf); sheetEl().setPointerCapture(e.pointerId);
+  });
+  sheetEl().addEventListener("pointermove", (e) => {
+    if (!start) return; let y = start.s + (e.clientY - start.y);
+    if (y < 0) y = (y * 60) / (60 + Math.abs(y) * 0.55) * 0.55;   // bord élastique
+    setSheetY(y); hist.push([e.clientY, e.timeStamp]); if (hist.length > 6) hist.shift();
+  });
+  const end = (e) => {
+    if (!start) return; start = null;
+    const [y0, t0] = hist[0], [y1, t1] = hist[hist.length - 1], v = t1 > t0 ? ((y1 - y0) / (t1 - t0)) * 1000 : 0;
+    const proj = sheetY + (v / 1000) * 0.998 / (1 - 0.998), H = sheetEl().offsetHeight;
+    if (proj > H * 0.45) closeSheet(v); else spring(sheetY, 0, v, { response: 0.3, damping: 0.8 }, setSheetY);
+  };
+  sheetEl().addEventListener("pointerup", end); sheetEl().addEventListener("pointercancel", end);
+  void head;
+})();
+
+/* ---------- curseurs (1 pour 1 sous le doigt, envoi au lâcher) ---------- */
+function slider(el, key, toValue, paint, fromKeyboard) {
+  let active = false;
+  const valueAt = (e) => { const r = el.getBoundingClientRect(); return toValue(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))); };
+  el.addEventListener("pointerdown", (e) => { const d = S.devices.get(S.sel); if (!d || !d.online) return;
+    active = true; S.drag = key; el.setPointerCapture(e.pointerId); paint(valueAt(e), d); });
+  el.addEventListener("pointermove", (e) => { if (active) paint(valueAt(e), S.devices.get(S.sel)); });
+  const end = (e) => { if (!active) return; active = false; S.drag = null; send(S.sel, key, valueAt(e)); };
+  el.addEventListener("pointerup", end); el.addEventListener("pointercancel", () => { active = false; S.drag = null; renderSheet(); });
+  el.addEventListener("keydown", (e) => { const d = S.devices.get(S.sel); if (!d) return; const v = fromKeyboard(d, e.key); if (v !== null) { e.preventDefault(); send(S.sel, key, v); } });
+}
+slider($("bar"), "brightness", (x) => Math.max(1, Math.round(x * 100)), (v, d) => paintBar(v, lampRgb(d)),
+  (d, k) => (k === "ArrowRight" || k === "ArrowUp" ? Math.min(100, level(d) + 5) : k === "ArrowLeft" || k === "ArrowDown" ? Math.max(1, level(d) - 5) : null));
+function ctRange(d) { const p = d.points.color_temp || {}; return [p.min || 2200, p.max || 6500]; }
+slider($("temp"), "color_temp", (x) => { const d = S.devices.get(S.sel), [lo, hi] = ctRange(d); return Math.round((lo + x * (hi - lo)) / 50) * 50; },
+  (v, d) => { const [lo, hi] = ctRange(d); paintTemp(v, lo, hi); },
+  (d, k) => { const [lo, hi] = ctRange(d), c = pv(d, "color_temp") || 3000; return k === "ArrowRight" ? Math.min(hi, c + 200) : k === "ArrowLeft" ? Math.max(lo, c - 200) : null; });
+
+/* ---------- gestes ---------- */
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-floor],[data-toggle],[data-open],.spot,[data-preset],#sToggle");
+  if (!t) return;
+  if (t.dataset.floor) { S.floor = t.dataset.floor; closeSheet(); renderFloors(); renderStage(); return; }
+  if (t.dataset.toggle) { const d = S.devices.get(t.dataset.toggle); if (d) send(d.id, "on", !isOn(d)); return; }
+  if (t.dataset.open) { openSheet(t.dataset.open); return; }
+  if (t.classList.contains("spot")) { if (S.sel === t.dataset.dev) closeSheet(); else openSheet(t.dataset.dev); return; }
+  if (t.dataset.preset) { const p = PRESETS[+t.dataset.preset]; if (p.ct) send(S.sel, "color_temp", p.ct); else send(S.sel, "color", p.c); return; }
+  if (t.id === "sToggle") { const d = S.devices.get(S.sel); if (d) send(d.id, "on", !isOn(d)); }
+});
+$("wrap").addEventListener("click", (e) => { if (S.sel && !e.target.closest(".spot")) closeSheet(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+$("pinForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); if (!S.hold) return;
+  const r = await api(`/api/approvals/${encodeURIComponent(S.hold.id)}`, { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ approve: true, pin: $("pin").value }) });
+  $("pin").value = "";
+  if (r.ok) { $("hold").hidden = true; S.hold = null; toast("Validé"); }
+  else toast(r.status === 403 ? "Code incorrect" : (r.data && (r.data.message || r.data.error)) || "Refusé");
+});
+addEventListener("resize", () => { if (S.layout) { placeStage(); const li = S.sel && S.layout.lights.find((x) => x.device === S.sel && x.floor === S.floor); zoomTo(li || null); } });
+setInterval(() => { const n = isNight(); if (n !== S.night) { S.night = n; renderStage(); } }, 60000);
+
+/* ---------- démarrage ---------- */
+(async function start() {
+  const lay = await api("/api/tableau");
+  if (lay.ok) { S.layout = lay.data; S.floor = lay.data.floors[0].id; S.night = isNight(); }
+  const devs = await api("/api/devices");
+  if (devs.ok) for (const d of devs.data) S.devices.set(d.id, d);
+  renderAll();
+  const es = new EventSource("/api/events");
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === "snapshot") { S.devices = new Map(ev.devices.map((d) => [d.id, d])); renderAll(); }
+    else if (ev.type === "device") { S.devices.set(ev.device.id, ev.device); renderAll(); }
+    else if (ev.type === "removed") { S.devices.delete(ev.device_id); if (S.sel === ev.device_id) closeSheet(); renderAll(); }
+    else if (ev.type === "state") { const d = S.devices.get(ev.device_id); if (d && d.points[ev.key] && S.drag !== ev.key) { d.points[ev.key].value = ev.value; renderDevice(d.id); } }
+    else if (ev.type === "online") { const d = S.devices.get(ev.device_id); if (d) { d.online = ev.online; renderDevice(d.id); } }
+  };
+  let lostT = 0;  // n'affiche la coupure que si elle dure
+  es.onerror = () => { clearTimeout(lostT); lostT = setTimeout(() => { $("sub").textContent = "Reconnexion…"; }, 4000); };
+  es.onopen = () => { clearTimeout(lostT); renderHeader(); };
+})();
+</script>
+</body>
+</html>
