@@ -280,14 +280,20 @@ class MatterDriver(Driver):
     # ---------- nœuds → appareils ----------
 
     def _unique_id(self, node: dict[str, Any], ep: int, multi: bool) -> str:
+        """Identité stable : le numéro de nœud dans NOTRE maison Matter (et l'endpoint s'il y en a
+        plusieurs). Jamais l'UniqueID (0/40/18) : certaines ampoules (Kingfisher MYKO) en tirent
+        un nouveau à chaque coupure de courant, ce qui créait un appareil fantôme."""
+        nid = int(node["node_id"])
+        return f"{self.id}:node{nid}-{ep}" if multi or node.get("is_bridge") else f"{self.id}:node{nid}"
+
+    def _legacy_id(self, node: dict[str, Any], ep: int, multi: bool) -> str | None:
+        """L'ancienne identité (v0.3 et avant, fondée sur l'UniqueID), pour reprendre les étiquettes."""
         uid = _attr(node, ep, BRIDGED_BASIC_INFO, 18) if node.get("is_bridge") else None
         if not uid:
             uid = _attr(node, 0, BASIC_INFO, 18)
             if uid and multi:
                 uid = f"{uid}-{ep}"
-        if not uid:
-            uid = f"node{node['node_id']}-{ep}" if multi else f"node{node['node_id']}"
-        return f"{self.id}:{str(uid).replace('/', '_')}"
+        return f"{self.id}:{str(uid).replace('/', '_')}" if uid else None
 
     def _apply_node(self, node: dict[str, Any]) -> None:
         assert self._hub
@@ -335,6 +341,9 @@ class MatterDriver(Driver):
             points={s.key: Point(s) for s in specs},
         )
         dev.native = {"node_id": int(node["node_id"]), "endpoint": ep}
+        legacy = self._legacy_id(node, ep, multi)
+        if legacy and legacy != dev.id:
+            dev.native["legacy_ids"] = [legacy]
         ts = now_ms()
         for key, value in self._values(node, ep, dev).items():
             dev.points[key].value = value

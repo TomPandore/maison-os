@@ -159,6 +159,14 @@ class Hub:
     # ---------- appareils ----------
 
     def upsert_device(self, dev: Device) -> None:
+        # identité changée par le pilote : on reprend les étiquettes posées sous l'ancienne
+        for old in dev.native.get("legacy_ids", []) if isinstance(dev.native, dict) else []:
+            if old != dev.id and old in self._labels and dev.id not in self._labels:
+                self._labels[dev.id] = self._labels.pop(old)
+                self._save_labels()
+                self.journal.write("label_migration", device=dev.id, ancien=old, actor="maison", origin=Origin.SYSTEM.value)
+            if old != dev.id and old in self.devices:
+                self.remove_device(old)
         self._apply_labels(dev)
         self.devices[dev.id] = dev
         self.publish({"type": "device", "device": dev.to_json()})

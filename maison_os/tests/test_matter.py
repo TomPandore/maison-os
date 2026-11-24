@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, time
 
 import pytest
@@ -15,7 +16,8 @@ from maison.drivers.matter import MatterDriver
 
 from .fake_matter_server import FakeMatterServer
 
-UID1, UID2, UID3 = "matter:UID-FICTIF-0001", "matter:UID-FICTIF-0002", "matter:UID-FICTIF-0003"
+UID1, UID2, UID3 = "matter:node1", "matter:node2", "matter:node3"
+OLD_UID1 = "matter:UID-FICTIF-0001"  # ancienne identité (UniqueID), avant la v0.4
 
 
 async def wait_for(cond, timeout=3.0):
@@ -201,3 +203,29 @@ def test_colour_conversions():
     assert m.xy_to_hex(*m.hex_to_xy("#ff0000")) == "#ff0000"
     assert m.mireds_to_kelvin(222) == 4505 and m.kelvin_to_mireds(2700) == 370
     assert m.level_to_pct(254) == 100 and m.pct_to_level(1) == 3 and m.pct_to_level(0.1) == 1
+
+
+async def test_identity_survives_uniqueid_change(tmp_path, server):
+    """Les ampoules MYKO tirent un nouvel UniqueID après une coupure de courant :
+    l'appareil doit rester le même (numéro de nœud), sans fantôme."""
+    hub = await make_hub(tmp_path, server)
+    try:
+        server.nodes[3]["attributes"]["0/40/18"] = "NOUVEL-UID-APRES-COUPURE"
+        await server.set_available(3, True)  # le serveur renvoie le nœud entier (node_updated)
+        await wait_for(lambda: hub.devices[UID3].online)
+        assert set(hub.devices) == {UID1, UID2, UID3}
+    finally:
+        await hub.stop()
+
+
+async def test_labels_follow_old_identity(tmp_path, server):
+    """Les étiquettes posées avant la v0.4 (sous l'UniqueID) sont reprises et journalisées."""
+    (tmp_path / "labels.json").write_text(json.dumps({OLD_UID1: {"name": "Lampe de bureau", "room": "Bureau"}}), encoding="utf-8")
+    hub = await make_hub(tmp_path, server)
+    try:
+        assert hub.devices[UID1].name == "Lampe de bureau" and hub.devices[UID1].room == "Bureau"
+        saved = json.loads((tmp_path / "labels.json").read_text(encoding="utf-8"))
+        assert UID1 in saved and OLD_UID1 not in saved
+        assert any(e.get("action") == "label_migration" for e in hub.journal.tail(20))
+    finally:
+        await hub.stop()
